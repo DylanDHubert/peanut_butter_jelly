@@ -60,33 +60,26 @@ class PDFProcessor:
             # NEW API: USE system_prompt_append INSTEAD OF DEPRECATED parsing_instruction
             # THIS APPENDS TO LLAMAPARSE'S SYSTEM PROMPT INSTEAD OF REPLACING IT
             system_prompt_append=(
-                "Focus on preserving technical content with high fidelity. "
-                "For tables with visual indicators (especially colored circles): "
-                "- Look for ORANGE and GREY filled circles as visual markers "
-                "- Pay attention to COMPLETE RANGES - don't cut off spans prematurely at boundaries "
-                "- If a pattern starts at column X and continues, follow it to its actual end, not just the next visual break "
-                "- ORANGE filled circles = TRUE/YES, GREY filled circles = FALSE/NO (or vice versa based on context) "
-                "- Empty cells with no visual markers = FALSE/NO "
-                "- Be extra careful at range boundaries - a span may continue across visual sections "
-                "For checkbox/boolean tables: "
-                "- Convert filled checkboxes, bullet points (•), check marks (✓), or 'X' marks to 'TRUE' or 'YES' "
-                "- Convert empty cells, blank spaces, or dash (-) marks to 'FALSE' or 'NO' "
-                "For all tables: maintain exact structure, preserve all numerical data and relationships. "
-                "For technical documents: keep precise measurements, specifications, and technical terms. "
-                "For headings: maintain proper hierarchy and formatting. "
-                "Prioritize accuracy over formatting - examine each cell carefully for faint or colored visual indicators."
+                "Focus on perfect table extraction and text preservation. "
+                "For tables with visual indicators: carefully examine each cell for any visual markers "
+                "(filled shapes, checkmarks, bullets, symbols) and convert them to clear boolean values. "
+                "When a table contains visual markers rather than text, prefix it with '[VISUAL-TABLE]'. "
+                "Maintain complete data ranges - if a pattern spans multiple columns, capture the full extent. "
+                "Preserve exact table structure with all numerical data and relationships intact. "
+                "When multiple related tables appear together, consider consolidating them into a single "
+                "comprehensive table if it improves data organization and readability. "
+                "Prioritize data accuracy over formatting aesthetics."
             ),
             
-            # ADD USER PROMPT FOR SPECIFIC COLOR CIRCLE AND RANGE DETECTION
+            # ADD USER PROMPT FOR TABLE AND DATA EXTRACTION
             user_prompt=(
-                "When you encounter tables with colored filled circles (orange/grey) or visual patterns: "
-                "1. Examine the FULL EXTENT of each colored pattern - don't stop at visual boundaries "
-                "2. If you see circles in columns 0,1,2,3,4,5 - capture ALL of them, not just 0,1 "
-                "3. Look for subtle color differences between filled circles (orange vs grey) "
-                "4. Empty cells or cells without colored circles = FALSE/NO "
-                "5. Cells with any colored filled circle = TRUE/YES "
-                "6. Follow ranges completely across table sections - patterns may span multiple visual groups "
-                "Be especially thorough with range detection - missing the end of a range is a critical error."
+                "Extract all tables with maximum fidelity. For cells with visual markers, "
+                "convert to TRUE/FALSE or YES/NO and mark the table with '[VISUAL-TABLE]'. "
+                "Empty or unmarked cells should be FALSE/NO. "
+                "Ensure complete data ranges are captured without truncation at visual boundaries. "
+                "If you see multiple related tables that could be better represented as one consolidated table "
+                "(e.g., a detail table and a layout table for the same data), merge them intelligently "
+                "by adding appropriate columns or structure to create a single comprehensive table."
             ),
             
             # PREMIUM MODE SETTINGS FOR BETTER PARSING QUALITY
