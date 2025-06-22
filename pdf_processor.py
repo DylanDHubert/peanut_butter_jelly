@@ -63,23 +63,23 @@ class PDFProcessor:
                 "Focus on perfect table extraction and text preservation. "
                 "For tables with visual indicators: carefully examine each cell for any visual markers "
                 "(filled shapes, checkmarks, bullets, symbols) and convert them to clear boolean values. "
-                "When a table contains visual markers rather than text, prefix it with '[VISUAL-TABLE]'. "
                 "Maintain complete data ranges - if a pattern spans multiple columns, capture the full extent. "
+                "When multiple tables have identical structure but different ranges (e.g., sizes 1-2, 3-4 vs sizes 5-6, 7-8), "
+                "consolidate them into a single table by adding a 'Size Range' or equivalent column. "
+                "Avoid double-wide table formats when single consolidated tables are cleaner. "
                 "Preserve exact table structure with all numerical data and relationships intact. "
-                "When multiple related tables appear together, consider consolidating them into a single "
-                "comprehensive table if it improves data organization and readability. "
                 "Prioritize data accuracy over formatting aesthetics."
             ),
             
             # ADD USER PROMPT FOR TABLE AND DATA EXTRACTION
             user_prompt=(
                 "Extract all tables with maximum fidelity. For cells with visual markers, "
-                "convert to TRUE/FALSE or YES/NO and mark the table with '[VISUAL-TABLE]'. "
+                "convert to TRUE/FALSE or YES/NO. "
                 "Empty or unmarked cells should be FALSE/NO. "
                 "Ensure complete data ranges are captured without truncation at visual boundaries. "
-                "If you see multiple related tables that could be better represented as one consolidated table "
-                "(e.g., a detail table and a layout table for the same data), merge them intelligently "
-                "by adding appropriate columns or structure to create a single comprehensive table."
+                "When you see multiple tables with the same column structure but different size ranges "
+                "(like separate tables for sizes 1-2/3-4 and 5-6/7-8), merge them into one comprehensive table "
+                "by adding a 'Size Range' column. This creates cleaner, more usable data structure."
             ),
             
             # PREMIUM MODE SETTINGS FOR BETTER PARSING QUALITY
