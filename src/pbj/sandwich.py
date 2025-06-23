@@ -189,8 +189,6 @@ class Sandwich:
         return self.process(pdf_path, output_dir)
 
 
-
-
 def main():
     """🥪 Command line interface for the PB&J Pipeline"""
     

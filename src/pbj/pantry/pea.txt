@@ -28,5 +28,5 @@ TECHNICAL REQUIREMENTS:
 - Preserve all numerical data exactly as shown
 - Maintain complete column-to-row relationships
 - Extract full data ranges across visual boundaries
-- Ensure no data truncation or omission
+- Ensure no data truncation or omission 
 - Adapt table structure when column definitions are discovered 
