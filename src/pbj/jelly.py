@@ -276,6 +276,12 @@ JSON OUTPUT:"""
     def _save_processed_data(self, processed_pages: List[ProcessedPage], output_file: str):
         """Save processed data to JSON file"""
         output_path = Path(output_file)
+        
+        # VALIDATE THAT OUTPUT_PATH IS A FILE PATH, NOT A DIRECTORY
+        if output_path.suffix.lower() != '.json':
+            # IF NO .json EXTENSION, ADD IT
+            output_path = output_path.with_suffix('.json')
+        
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # CONVERT TO SERIALIZABLE FORMAT
@@ -407,12 +413,25 @@ JSON OUTPUT:"""
         """
         print(f"PROCESSING {len(enhanced_docs)} ENHANCED DOCUMENTS WITH DUAL APPROACH")
         
-        # PROCESS EACH ENHANCED DOCUMENT
+        # PROCESS EACH ENHANCED DOCUMENT AND SAVE IMMEDIATELY
         processed_pages = []
         for enhanced_doc in enhanced_docs:
             try:
                 processed_page = self.process_enhanced_document(enhanced_doc)
                 processed_pages.append(processed_page)
+                
+                # SAVE EACH PROCESSED PAGE IMMEDIATELY (PAGE-WISE SAVING)
+                if output_file:
+                    # Create output directory if it doesn't exist
+                    output_path = Path(output_file)
+                    output_dir = output_path.parent
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    # Save individual page with proper file extension
+                    page_file = output_dir / f"{processed_page.page_id}.json"
+                    with open(page_file, 'w', encoding='utf-8') as f:
+                        json.dump(asdict(processed_page), f, indent=2, ensure_ascii=False)
+                    print(f"✅ PROCESSED AND SAVED: {enhanced_doc.filename}")
+                
             except Exception as e:
                 print(f"⚠️  FAILED TO PROCESS {enhanced_doc.filename}: {e}")
                 continue
@@ -421,7 +440,7 @@ JSON OUTPUT:"""
         if output_file:
             self._save_processed_data(processed_pages, output_file)
         
-        print(f"🎉 SUCCESSFULLY PROCESSED {len(processed_pages)}/{len(enhanced_docs)} ENHANCED DOCUMENTS")
+        print(f"🎉 SUCCESSFULLY PROCESSED AND SAVED {len(processed_pages)}/{len(enhanced_docs)} ENHANCED DOCUMENTS")
         return processed_pages
 
     def _process_document_folder(self, document_folder_path: str) -> List[ProcessedPage]:

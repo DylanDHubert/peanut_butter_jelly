@@ -269,27 +269,28 @@ ENHANCED OUTPUT:"""
         
         print(f"ENHANCING {len(markdown_files)} PARSED DOCUMENTS")
         
+        # CREATE ENHANCED FOLDER
+        enhanced_folder = doc_folder / "02_enhanced_markdown"
+        enhanced_folder.mkdir(exist_ok=True)
+        
         enhanced_docs = []
         for md_file in markdown_files:
             try:
                 enhanced_doc = self.process_file(str(md_file))
                 enhanced_docs.append(enhanced_doc)
-                print(f"✅ ENHANCED: {md_file.name}")
+                
+                # SAVE EACH ENHANCED DOCUMENT IMMEDIATELY (PAGE-WISE SAVING)
+                self._save_single_enhanced_document(enhanced_doc, enhanced_folder, doc_folder.name)
+                
+                print(f"✅ ENHANCED AND SAVED: {md_file.name}")
             except Exception as e:
                 print(f"❌ FAILED TO ENHANCE {md_file.name}: {e}")
                 continue
         
-        # SAVE ENHANCED DOCUMENTS TO STAGE 2 FOLDER
-        enhanced_folder = doc_folder / "02_enhanced_markdown"
-        enhanced_folder.mkdir(exist_ok=True)
-        
-        for enhanced_doc in enhanced_docs:
-            self._save_single_enhanced_document(enhanced_doc, enhanced_folder, doc_folder.name)
-        
         # UPDATE DOCUMENT METADATA
         self._update_document_metadata(doc_folder, "enhancement", enhanced_docs)
         
-        print(f"✅ SAVED {len(enhanced_docs)} ENHANCED DOCUMENTS TO: {enhanced_folder}")
+        print(f"✅ ENHANCED AND SAVED {len(enhanced_docs)} DOCUMENTS TO: {enhanced_folder}")
         
         return enhanced_docs
 
