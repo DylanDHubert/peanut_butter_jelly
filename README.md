@@ -85,34 +85,62 @@ pip install -r requirements.txt
 - `OPENAI_API_KEY` - For enhancement and cleaning (Butter & Jelly stages)
 
 ### **Complete PB&J Pipeline**
+```python
+# Complete pipeline in one line
+from pbj import Sandwich
+
+sandwich = Sandwich(use_premium=True, openai_model="gpt-4")
+result = sandwich.make("document.pdf")
+print(f"Results saved to: {result['folder_structure']['main_folder']}")
+```
+
 ```bash
-# Run full pipeline (all three stages)
-python3 pipeline_complete.py document.pdf --premium --model gpt-4
+# Or via command line
+python3 -m pbj.sandwich document.pdf --premium --model gpt-4
 ```
 
 ### **Stage-by-Stage Execution**
 
 #### **🥜 Peanut Only (Parse)**
 ```python
-from pdf_processor import PDFProcessor
+from pbj import Peanut
 
-processor = PDFProcessor(use_premium=True)
-parsed_docs = processor.parse_pdf("document.pdf")
-result = processor.save_parsed_documents(parsed_docs, source_pdf_path="document.pdf")
+peanut = Peanut(use_premium=True)
+parsed_docs = peanut.pdf2md("document.pdf")
+result = peanut.save_parsed_documents(parsed_docs, source_pdf_path="document.pdf")
 ```
 
 #### **🧈 Butter Only (Better)**
 ```python
-from markdown_enhancer import enhance_document_folder
+from pbj import Butter
 
-enhanced_docs = enhance_document_folder("data/document_folder")
+butter = Butter(model="gpt-4")
+enhanced_docs = butter.enhance_document_folder("data/document_folder")
 ```
 
 #### **🍇 Jelly Only (JSON)**
 ```python
-from data_cleaner import process_document_folder
+from pbj import Jelly
 
-processed_pages = process_document_folder("data/document_folder")
+jelly = Jelly(model="gpt-4")
+processed_pages = jelly.process_document_folder("data/document_folder")
+```
+
+### **Individual Method Usage**
+```python
+from pbj import Peanut, Butter, Jelly
+
+# Stage 1: Parse PDF to markdown
+peanut = Peanut(use_premium=True)
+parsed_docs = peanut.pdf2md("document.pdf")
+
+# Stage 2: Enhance markdown structure  
+butter = Butter(model="gpt-4")
+enhanced_doc = butter.md2md(parsed_docs[0].content, "document.md")
+
+# Stage 3: Extract structured JSON
+jelly = Jelly(model="gpt-4")
+json_result = jelly.md2json(enhanced_doc.enhanced_content, "document.md")
 ```
 
 ---
@@ -174,22 +202,37 @@ python3 continue_pipeline.py data/document_folder
 
 ```
 🥜🧈🍇 PB&J Pipeline/
-├── 🥜 Peanut (Parse)
-│   └── pdf_processor.py           # LlamaParse integration
-├── 🧈 Butter (Better)  
-│   └── markdown_enhancer.py       # OpenAI enhancement
-├── 🍇 Jelly (JSON)
-│   └── data_cleaner.py           # JSON extraction
-├── 🥜🧈🍇 Complete Pipeline
-│   └── pipeline_complete.py       # Full PB&J pipeline
-├── ⚙️ Configuration
-│   ├── pdf_system_prompt.txt      # Peanut prompts
-│   ├── pdf_user_prompt.txt
-│   ├── markdown_enhancement_prompt.txt  # Butter prompts
-│   └── data_cleaning_prompt.txt   # Jelly prompts
-└── 📋 Documentation
-    ├── README.md                   # This file
-    └── requirements.txt           # Dependencies
+├── src/pbj/                       # Main PB&J package
+│   ├── __init__.py               # Package imports
+│   ├── 🥜 peanut.py              # Parse stage (LlamaParse)
+│   ├── 🧈 butter.py              # Better stage (OpenAI)
+│   ├── 🍇 jelly.py               # JSON stage (OpenAI)
+│   ├── 🥪 sandwich.py            # Complete pipeline
+│   └── pantry/                   # Configuration pantry
+│       ├── pea.txt               # Peanut system prompt
+│       ├── nut.txt               # Peanut user prompt  
+│       ├── butter.txt            # Butter enhancement prompt
+│       └── jelly.txt             # Jelly extraction prompt
+├── 📋 Documentation
+│   ├── README.md                 # This file
+│   └── requirements.txt          # Dependencies
+└── 🧪 Testing
+    └── test_pbj.py               # Package structure test
+```
+
+### **Package Import Structure**
+```python
+# Main classes (fun names for humans)
+from pbj import Peanut, Butter, Jelly, Sandwich
+
+# Simple method names (for coding agents)
+peanut.pdf2md()    # PDF → Markdown
+butter.md2md()     # Markdown → Enhanced Markdown  
+jelly.md2json()    # Markdown → JSON
+sandwich.make()    # Complete pipeline
+
+# Fun aliases (for the adventurous)
+from pbj import Parse, Better, JSON, Pipeline
 ```
 
 ---
