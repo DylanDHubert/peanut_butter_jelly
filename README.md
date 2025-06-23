@@ -1,4 +1,4 @@
-# 🥜🧈🍇 PB&J Pipeline
+# 🥜🧈🍇🥪 PB&J Pipeline
 ## Parse, Better, JSON - The Ultimate RAG Document Processing Pipeline
 
 The **PB&J Pipeline** is a three-stage document processing system that transforms PDFs into clean, structured JSON optimized for RAG (Retrieval-Augmented Generation) applications.
@@ -7,6 +7,7 @@ The **PB&J Pipeline** is a three-stage document processing system that transform
 - **🥜 Peanut (Parse)**: Extract raw content from PDFs using LlamaParse
 - **🧈 Butter (Better)**: Enhance markdown structure and readability with AI
 - **🍇 Jelly (JSON)**: Convert to clean, searchable JSON for RAG systems
+- **🥪 Sandwich**: Complete pipeline orchestrator
 
 ---
 
@@ -90,146 +91,119 @@ pip install -r requirements.txt
 from pbj import Sandwich
 
 sandwich = Sandwich(use_premium=True, openai_model="gpt-4")
-result = sandwich.make("document.pdf")
+result = sandwich.process("document.pdf")  # or sandwich.make()
 print(f"Results saved to: {result['folder_structure']['main_folder']}")
 ```
 
 ```bash
 # Or via command line
-python3 -m pbj.sandwich document.pdf --premium --model gpt-4
+python3 -m src.pbj.sandwich document.pdf --premium --model gpt-4
 ```
 
-### **Stage-by-Stage Execution**
+### **Clean Standardized Interface**
 
-#### **🥜 Peanut Only (Parse)**
+All classes follow the same consistent pattern:
+
 ```python
-from pbj import Peanut
+from pbj import Peanut, Butter, Jelly, Sandwich
 
+# 🥜 Peanut (Parse) - Clean interface
 peanut = Peanut(use_premium=True)
-parsed_docs = peanut.pdf2md("document.pdf")
-result = peanut.save_parsed_documents(parsed_docs, source_pdf_path="document.pdf")
-```
+parsed = peanut.process("document.pdf")        # Main method
+parsed = peanut.process_async("document.pdf")  # Async version
 
-#### **🧈 Butter Only (Better)**
-```python
-from pbj import Butter
-
+# 🧈 Butter (Better) - Clean interface
 butter = Butter(model="gpt-4")
-enhanced_docs = butter.enhance_document_folder("data/document_folder")
-```
+enhanced = butter.process(content, "file.md")    # Process content
+enhanced = butter.process_file("document.md")    # Process file
+docs = butter.process_folder("folder/")          # Process folder
+enhanced = butter.process_async(content)         # Async version
 
-#### **🍇 Jelly Only (JSON)**
-```python
-from pbj import Jelly
-
+# 🍇 Jelly (JSON) - Clean interface
 jelly = Jelly(model="gpt-4")
-processed_pages = jelly.process_document_folder("data/document_folder")
+json_data = jelly.process(content, "file.md")   # Process content
+json_data = jelly.process_file("document.md")   # Process file
+pages = jelly.process_folder("folder/")         # Process folder
+json_data = jelly.process_async("file.md")      # Async version
+
+# 🥪 Sandwich (Complete) - Clean interface
+sandwich = Sandwich(use_premium=True)
+result = sandwich.process("document.pdf")       # Standardized method
+result = sandwich.make("document.pdf")          # User-friendly alias
 ```
 
-### **Individual Method Usage**
+### **Fun Themed Aliases**
 ```python
-from pbj import Peanut, Butter, Jelly
+# For those who like the themed experience
+from pbj import Parse, Better, JSON, Pipeline
 
-# Stage 1: Parse PDF to markdown
-peanut = Peanut(use_premium=True)
-parsed_docs = peanut.pdf2md("document.pdf")
+parser = Parse(use_premium=True)
+enhancer = Better(model="gpt-4")
+extractor = JSON(model="gpt-4")
+pipeline = Pipeline(use_premium=True)
 
-# Stage 2: Enhance markdown structure  
-butter = Butter(model="gpt-4")
-enhanced_doc = butter.md2md(parsed_docs[0].content, "document.md")
-
-# Stage 3: Extract structured JSON
-jelly = Jelly(model="gpt-4")
-json_result = jelly.md2json(enhanced_doc.enhanced_content, "document.md")
+# Same clean interface
+parsed = parser.process("document.pdf")
+enhanced = enhancer.process(parsed[0].content)
+json_data = extractor.process(enhanced.enhanced_content)
+complete = pipeline.process("document.pdf")  # or pipeline.make()
 ```
 
 ---
 
-## 🛠️ **Configuration**
+## 🎯 **Interface Design**
 
-### **Peanut (Parse) Configuration**
-- **Files**: `config/pdf_system_prompt.txt`, `config/pdf_user_prompt.txt`
-- **Settings**: Premium mode, OCR enabled, HTML tables, visual marker detection
+### **Consistent Method Patterns**
+| Class | Main Method | File Method | Folder Method | Async Method |
+|-------|-------------|-------------|---------------|--------------|
+| **🥜 Peanut** | `process()` | - | - | `process_async()` |
+| **🧈 Butter** | `process()` | `process_file()` | `process_folder()` | `process_async()` |
+| **🍇 Jelly** | `process()` | `process_file()` | `process_folder()` | `process_async()` |
+| **🥪 Sandwich** | `process()` / `make()` | - | - | - |
 
-### **Butter (Better) Configuration**
-- **File**: `config/markdown_enhancement_prompt.txt`
-- **Focus**: Structure improvement while preserving all data
-
-### **Jelly (JSON) Configuration**
-- **File**: `config/data_cleaning_prompt.txt`
-- **Focus**: RAG optimization and searchable JSON structure
-
----
-
-## 📊 **Pipeline Features**
-
-### **🔄 Immediate Saves**
-- **Peanut**: Saves after complete PDF parsing
-- **Butter**: Saves after each page enhancement
-- **Jelly**: Saves after each page processing + final combined output
-
-### **📈 Data Integrity**
-- ✅ **Zero data loss**: Every table row preserved exactly
-- ✅ **Numerical fidelity**: All measurements and values identical
-- ✅ **Boolean integrity**: TRUE/FALSE values from visual markers
-- ✅ **Complete tracking**: Metadata tracks every stage
-
-### **🎯 RAG Optimization**
-- Searchable keywords and summaries
-- Technical terminology extraction
-- Table structure with metadata
-- Data type classification
-- Measurement units standardization
+### **Clean Design Principles**
+- **Consistent**: Same method names across all classes
+- **Predictable**: `process()` is always the main method
+- **Intuitive**: Method names clearly indicate their purpose
+- **Private**: Internal pipeline methods are hidden (prefixed with `_`)
+- **No Confusion**: No legacy or duplicate method names
 
 ---
 
-## 🧪 **Testing**
-
-### **Test Complete Pipeline**
-```bash
-python3 test_new_structure.py
-```
-
-### **Continue from Specific Stage**
-```bash
-# Continue from Butter stage (if Peanut already completed)
-python3 continue_pipeline.py data/document_folder
-```
-
----
-
-## 📝 **File Structure**
+## 📂 **Project Structure**
 
 ```
-🥜🧈🍇 PB&J Pipeline/
-├── src/pbj/                       # Main PB&J package
-│   ├── __init__.py               # Package imports
-│   ├── 🥜 peanut.py              # Parse stage (LlamaParse)
-│   ├── 🧈 butter.py              # Better stage (OpenAI)
-│   ├── 🍇 jelly.py               # JSON stage (OpenAI)
-│   ├── 🥪 sandwich.py            # Complete pipeline
-│   └── pantry/                   # Configuration pantry
-│       ├── pea.txt               # Peanut system prompt
-│       ├── nut.txt               # Peanut user prompt  
-│       ├── butter.txt            # Butter enhancement prompt
-│       └── jelly.txt             # Jelly extraction prompt
+pipeline/
+├── 🥜🧈🍇 Core Pipeline
+│   └── src/pbj/
+│       ├── __init__.py               # Clean package imports
+│       ├── 🥜 peanut.py              # Parse stage (LlamaParse)
+│       ├── 🧈 butter.py              # Better stage (OpenAI)
+│       ├── 🍇 jelly.py               # JSON stage (OpenAI)
+│       ├── 🥪 sandwich.py            # Complete pipeline
+│       └── pantry/                   # Configuration pantry
+│           ├── pea.txt               # Peanut system prompt
+│           ├── nut.txt               # Peanut user prompt  
+│           ├── butter.txt            # Butter enhancement prompt
+│           └── jelly.txt             # Jelly extraction prompt
 ├── 📋 Documentation
-│   ├── README.md                 # This file
-│   └── requirements.txt          # Dependencies
-└── 🧪 Testing
-    └── test_pbj.py               # Package structure test
+│   ├── README.md                     # This file
+│   ├── STANDARDIZED_INTERFACE.md     # Detailed interface docs
+│   └── requirements.txt              # Dependencies
+└── 🧪 Examples
+    └── example_pbj.py                # Clean interface examples
 ```
 
 ### **Package Import Structure**
 ```python
-# Main classes (fun names for humans)
+# Main classes (clean, standardized interface)
 from pbj import Peanut, Butter, Jelly, Sandwich
 
-# Simple method names (for coding agents)
-peanut.pdf2md()    # PDF → Markdown
-butter.md2md()     # Markdown → Enhanced Markdown  
-jelly.md2json()    # Markdown → JSON
-sandwich.make()    # Complete pipeline
+# Consistent method names across all classes
+peanut.process()      # PDF → Markdown
+butter.process()      # Markdown → Enhanced Markdown  
+jelly.process()       # Markdown → JSON
+sandwich.process()    # Complete pipeline
 
 # Fun aliases (for the adventurous)
 from pbj import Parse, Better, JSON, Pipeline
@@ -242,17 +216,26 @@ from pbj import Parse, Better, JSON, Pipeline
 1. **🥜 Peanut (Parse)**: The foundation - extracts raw content like peanuts from shells
 2. **🧈 Butter (Better)**: The enhancement - makes everything smoother and better
 3. **🍇 Jelly (JSON)**: The sweetness - creates the final delicious, structured output
+4. **🥪 Sandwich**: The complete meal - orchestrates everything together
 
 Together they make the perfect **PB&J sandwich** - a complete, satisfying solution for document processing! 🥪
+
+### **Clean Interface Benefits**
+- **No Confusion**: Only one way to do each operation
+- **Consistent**: Same patterns across all classes
+- **Predictable**: `process()` always works the same way
+- **Future-Proof**: Easy to extend with new classes
+- **AI-Friendly**: Simple method names for coding agents
+- **Human-Friendly**: Clear, descriptive functionality
 
 ---
 
 ## 📞 **Support**
 
 The PB&J Pipeline transforms technical PDFs into RAG-ready JSON with:
-- **6 tables extracted** from test document
-- **19 unique keywords** generated
-- **4 pages processed** in organized structure
-- **Perfect data preservation** throughout all stages
+- **Clean, standardized interface** across all classes
+- **Private internal methods** hidden from users
+- **Consistent method patterns** for predictable usage
+- **Complete pipeline automation** with organized output structure
 
-**Made with ❤️ and a love for good sandwiches** 🥜🧈🍇
+Ready to make some delicious document processing sandwiches! 🥪
