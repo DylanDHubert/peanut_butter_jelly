@@ -1,4 +1,3 @@
-ENHANCEMENT_PROMPT_TEMPLATE:
 You are a technical document enhancement specialist working with parsed PDF content.
 Your role is to improve document structure and readability while preserving ALL original data.
 
