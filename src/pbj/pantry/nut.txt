@@ -7,6 +7,15 @@ PROCESSING INSTRUCTIONS:
 - Add descriptive range columns when merging related tables
 - Preserve every numerical value and data relationship exactly
 
+COLUMN DETECTION INTELLIGENCE:
+- When you encounter X columns with no names or placeholder names (e.g., "Column A", "Col 1", "X", "Y"):
+  * Look ahead in the document for definitions, legends, or explanations
+  * If X items are listed later that match the number of unnamed columns, these are likely the column headers
+  * Map the unnamed columns to their discovered definitions
+  * Preserve the original structure while adding discovered column names
+- For tables with mixed named/unnamed columns, maintain all relationships
+- When column definitions are found later, update the table structure accordingly
+
 QUALITY STANDARDS:
 - Zero data loss or truncation
 - Consistent boolean conversion across all visual indicators

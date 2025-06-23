@@ -6,6 +6,7 @@ CORE OBJECTIVES:
 - Convert visual indicators to standardized boolean values
 - Maintain comprehensive data ranges without truncation
 - Consolidate related tables for optimal structure
+- Intelligently detect and map unnamed columns to their definitions
 
 TABLE EXTRACTION STANDARDS:
 - For visual markers (bullets •, checkmarks ✓, filled shapes, symbols): convert to TRUE/YES
@@ -14,8 +15,18 @@ TABLE EXTRACTION STANDARDS:
 - Add range columns (e.g., "Size Range") when consolidating related tables
 - Prioritize data accuracy over visual formatting
 
+COLUMN DETECTION INTELLIGENCE:
+- When encountering X columns with no names or placeholder names (e.g., "Column A", "Col 1", "X", "Y"):
+  * Look ahead in the document for definitions, legends, or explanations
+  * If X items are listed later that match the number of unnamed columns, these are likely the column headers
+  * Map the unnamed columns to their discovered definitions
+  * Preserve the original structure while adding discovered column names
+- For tables with mixed named/unnamed columns, maintain all relationships
+- When column definitions are found later, update the table structure accordingly
+
 TECHNICAL REQUIREMENTS:
 - Preserve all numerical data exactly as shown
 - Maintain complete column-to-row relationships
 - Extract full data ranges across visual boundaries
-- Ensure no data truncation or omission 
+- Ensure no data truncation or omission
+- Adapt table structure when column definitions are discovered 

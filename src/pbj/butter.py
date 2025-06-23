@@ -308,8 +308,12 @@ ENHANCED OUTPUT:"""
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
             
+            # ENSURE stages_completed FIELD EXISTS
+            if "stages_completed" not in metadata:
+                metadata["stages_completed"] = []
+            
             # UPDATE STAGES COMPLETED
-            if stage not in metadata.get("stages_completed", []):
+            if stage not in metadata["stages_completed"]:
                 metadata["stages_completed"].append(stage)
             
             # ADD ENHANCEMENT INFO
@@ -327,6 +331,8 @@ ENHANCED OUTPUT:"""
                 json.dump(metadata, f, indent=2)
             
             print(f"UPDATED DOCUMENT METADATA: {metadata_file}")
+        else:
+            print(f"WARNING: No metadata file found at {metadata_file}")
     
     def _save_enhanced_documents(self, enhanced_docs: List[EnhancedDocument], output_dir: str, source_folder: str):
         """Save enhanced documents to directory"""
