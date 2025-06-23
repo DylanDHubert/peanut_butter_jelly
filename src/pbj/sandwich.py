@@ -48,7 +48,7 @@ class Sandwich:
     def __init__(self, config: Optional[PipelineConfig] = None, use_premium: bool = False, openai_model: str = "gpt-4"):
         """
         Initialize the Sandwich with pipeline configuration
-    
+        
         Args:
             config: PipelineConfig object with all settings
             use_premium: Whether to use LlamaParse Premium mode (overrides config)
