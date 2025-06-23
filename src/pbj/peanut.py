@@ -7,17 +7,17 @@ using LlamaParse API and returns clean markdown documents.
 """
 
 import os
+import json
 import asyncio
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
 
-from llama_parse import LlamaParse
-from dotenv import load_dotenv
+from llama_parse import LlamaParse, ResultType
 
-# LOAD ENVIRONMENT VARIABLES FROM .ENV FILE
-load_dotenv()
+# IMPORT OUR CONFIGURATION SYSTEM
+from .config import PipelineConfig, create_config
 
 @dataclass
 class ParsedDocument:
@@ -33,20 +33,23 @@ class Peanut:
     Optimized for technical and table-heavy documents
     """
     
-    def __init__(self, api_key: Optional[str] = None, use_premium: bool = False):
+    def __init__(self, config: Optional[PipelineConfig] = None, api_key: Optional[str] = None, use_premium: bool = False):
         """
         Initialize the PDF processor
         
         Args:
-            api_key: LlamaParse API key (if not provided, will try to get from env)
+            config: PipelineConfig object with all settings
+            api_key: LlamaParse API key (if not provided, will try to get from config)
             use_premium: Whether to use Premium mode for better parsing quality (costs more)
         """
-        # GET API KEY FROM ENVIRONMENT OR PARAMETER
-        self.api_key = api_key or os.getenv("LLAMA_CLOUD_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "LlamaParse API key is required. Set LLAMA_CLOUD_API_KEY environment variable "
-                "or pass it directly to the constructor."
+        # LOAD CONFIGURATION - PRIORITY: config parameter > api_key/use_premium > defaults
+        if config:
+            self.config = config
+        else:
+            # CREATE CONFIG WITH PROVIDED PARAMETERS
+            self.config = create_config(
+                llamaparse_api_key=api_key,
+                use_premium_mode=use_premium
             )
         
         # LOAD PROMPTS FROM CONFIG FILE
@@ -55,13 +58,13 @@ class Peanut:
         # CONFIGURE LLAMAPARSE WITH OPTIMIZED SETTINGS FOR TECHNICAL DOCUMENTS
         # USING NEW API PARAMETERS INSTEAD OF DEPRECATED parsing_instruction
         self.parser = LlamaParse(
-            api_key=self.api_key,
-            result_type="markdown",  # OUTPUT FORMAT AS MARKDOWN
-            verbose=True,            # ENABLE VERBOSE LOGGING
+            api_key=self.config.llamaparse_api_key,  # CONFIG VALIDATION ENSURES THIS IS NOT NONE
+            result_type=ResultType.MD,  # OUTPUT FORMAT AS MARKDOWN
+            verbose=self.config.enable_verbose_logging,  # ENABLE VERBOSE LOGGING
             language="en",           # SET LANGUAGE TO ENGLISH
             
             # PAGE BREAK CONFIGURATION - LLAMAPARSE HAS BUILT-IN PAGE SEPARATOR SUPPORT
-            page_separator="\n---\n",  # USE HORIZONTAL RULES FOR PAGE BREAKS
+            page_separator=self.config.page_separator,  # USE CONFIGURABLE PAGE SEPARATOR
             
             # NEW API: USE system_prompt_append INSTEAD OF DEPRECATED parsing_instruction
             # THIS APPENDS TO LLAMAPARSE'S SYSTEM PROMPT INSTEAD OF REPLACING IT
@@ -71,7 +74,7 @@ class Peanut:
             user_prompt=prompts['user_prompt'],
             
             # PREMIUM MODE SETTINGS FOR BETTER PARSING QUALITY
-            premium_mode=use_premium,  # ENABLE PREMIUM MODE FOR COMPLEX DOCUMENTS
+            premium_mode=self.config.use_premium_mode,  # ENABLE PREMIUM MODE FOR COMPLEX DOCUMENTS
             
             # OTHER OPTIMIZATIONS FOR TECHNICAL DOCUMENTS
             output_tables_as_HTML=True,  # USE HTML TABLES FOR COMPLEX TABLE STRUCTURES
@@ -80,11 +83,11 @@ class Peanut:
             disable_ocr=False,  # ENSURE OCR IS ENABLED TO DETECT FAINT MARKS
             skip_diagonal_text=False,  # DON'T SKIP DIAGONAL TEXT THAT MIGHT BE CHECKMARKS
             
-            max_timeout=180,  # 3 MINUTES TIMEOUT FOR PREMIUM MODE
+            max_timeout=self.config.max_timeout,  # CONFIGURABLE TIMEOUT
         )
         
         # STORE MODE FOR REPORTING
-        self.use_premium = use_premium
+        self.use_premium = self.config.use_premium_mode
     
     def _load_prompts(self):
         """Load prompts from pantry - much cleaner approach"""
@@ -192,101 +195,88 @@ class Peanut:
         
         Args:
             parsed_docs: List of ParsedDocument objects to save
-            output_dir: Custom output directory (if None, will create timestamped directory)
+            output_dir: Custom output directory (if None, will use config default)
             source_pdf_path: Path to original PDF file to copy to output
             
         Returns:
             Dict[str, Any]: Information about the created directory structure
         """
-        # CREATE ORGANIZED PER-DOCUMENT DIRECTORY STRUCTURE
-        if output_dir is None:
-            # CREATE TIMESTAMPED DIRECTORY WITH MODE IDENTIFIER
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            mode_suffix = "premium" if self.use_premium else "standard"
-            if source_pdf_path:
-                pdf_name = Path(source_pdf_path).stem
-                run_id = f"{pdf_name}_{timestamp}_{mode_suffix}"
-            else:
-                run_id = f"document_{timestamp}_{mode_suffix}"
-            output_path = Path("data") / run_id
+        if not parsed_docs:
+            raise ValueError("NO PARSED DOCUMENTS TO SAVE")
+        
+        # DETERMINE OUTPUT PATH USING CONFIGURATION SYSTEM
+        if source_pdf_path:
+            pdf_filename = Path(source_pdf_path).name
         else:
-            output_path = Path(output_dir)
+            pdf_filename = parsed_docs[0].filename.replace('.md', '.pdf')
         
-        # CREATE MAIN DOCUMENT DIRECTORY
-        output_path.mkdir(parents=True, exist_ok=True)
+        # GET OUTPUT PATH FROM CONFIGURATION
+        document_folder = self.config.get_output_path(pdf_filename, output_dir)
         
-        # CREATE SUBDIRECTORIES FOR ORGANIZED STORAGE
-        parsed_md_dir = output_path / "01_parsed_markdown"
-        parsed_md_dir.mkdir(exist_ok=True)
+        # CREATE DIRECTORY STRUCTURE
+        document_folder.mkdir(parents=True, exist_ok=True)
         
-        # COPY ORIGINAL PDF TO DOCUMENT FOLDER
+        # CREATE SUBFOLDERS FOR ORGANIZED OUTPUT
+        parsed_markdown_folder = document_folder / "01_parsed_markdown"
+        parsed_markdown_folder.mkdir(exist_ok=True)
+        
+        # COPY ORIGINAL PDF IF PROVIDED
         if source_pdf_path and Path(source_pdf_path).exists():
             import shutil
-            pdf_dest = output_path / Path(source_pdf_path).name
+            pdf_dest = document_folder / Path(source_pdf_path).name
             shutil.copy2(source_pdf_path, pdf_dest)
-            print(f"COPIED ORIGINAL PDF: {pdf_dest}")
+            print(f"📄 COPIED ORIGINAL PDF TO: {pdf_dest}")
         
+        # SAVE PARSED DOCUMENTS
         saved_files = []
+        for i, doc in enumerate(parsed_docs):
+            # CREATE FILENAME WITH PAGE NUMBER IF MULTIPLE DOCUMENTS
+            if len(parsed_docs) > 1:
+                filename = f"page_{i+1}.md"
+            else:
+                filename = doc.filename
+            
+            file_path = parsed_markdown_folder / filename
+            
+            # SAVE MARKDOWN CONTENT
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(doc.content)
+            
+            saved_files.append(str(file_path))
+            print(f"💾 SAVED PARSED DOCUMENT: {file_path}")
         
-        # SAVE EACH DOCUMENT TO PARSED MARKDOWN SUBFOLDER
-        for doc in parsed_docs:
-            output_file = parsed_md_dir / doc.filename
-            
-            # CREATE MARKDOWN FILE WITH COMPREHENSIVE METADATA HEADER
-            content_with_metadata = f"""# {Path(doc.filename).stem.replace('_', ' ').title()}
-
-*Parsed from PDF using LlamaParse on {doc.parse_timestamp.strftime('%Y-%m-%d %H:%M:%S')}*
-*Processing time: {doc.parsing_time_seconds:.2f} seconds*
-*Mode: {'Premium' if self.use_premium else 'Standard'}*
-*Document ID: {output_path.name}*
-
----
-
-{doc.content}
-"""
-            
-            # WRITE FILE TO DISK
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(content_with_metadata)
-            
-            print(f"SAVED PARSED PAGE: {output_file}")
-            saved_files.append(str(output_file))
-        
-        # CREATE METADATA FILE FOR THE DOCUMENT
-        metadata_file = output_path / "document_metadata.json"
-        document_metadata = {
-            "document_id": output_path.name,
-            "timestamp": datetime.now().isoformat(),
-            "source_pdf": Path(source_pdf_path).name if source_pdf_path else None,
-            "parsing_mode": "premium" if self.use_premium else "standard",
-            "processing_time_seconds": parsed_docs[0].parsing_time_seconds if parsed_docs else 0,
-            "page_count": len(parsed_docs),
-            "stages_completed": ["01_parsed_markdown"],
-            "directory_structure": {
-                "main_folder": str(output_path),
-                "original_pdf": str(output_path / Path(source_pdf_path).name) if source_pdf_path else None,
-                "parsed_markdown": str(parsed_md_dir),
-                "enhanced_markdown": str(output_path / "02_enhanced_markdown"),
-                "cleaned_json": str(output_path / "03_cleaned_json"),
-                "final_output": str(output_path / "final_output.json")
+        # CREATE METADATA FILE
+        metadata = {
+            "processing_info": {
+                "processor": "Peanut (LlamaParse)",
+                "processing_time": datetime.now().isoformat(),
+                "total_documents": len(parsed_docs),
+                "use_premium_mode": self.use_premium,
+                "page_separator": self.config.page_separator
             },
-            "files": [doc.filename for doc in parsed_docs]
+            "document_info": {
+                "source_pdf": source_pdf_path,
+                "parsed_files": saved_files,
+                "total_characters": sum(len(doc.content) for doc in parsed_docs)
+            },
+            "folder_structure": {
+                "main_folder": str(document_folder),
+                "parsed_markdown_folder": str(parsed_markdown_folder)
+            }
         }
         
-        import json
+        metadata_file = document_folder / "document_metadata.json"
         with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(document_metadata, f, indent=2)
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
         
-        print(f"SAVED DOCUMENT METADATA: {metadata_file}")
-        print(f"DOCUMENT FOLDER CREATED: {output_path}")
-        print(f"STAGE 1 COMPLETE - PARSED MARKDOWN SAVED IN: {parsed_md_dir}")
+        print(f"📋 SAVED METADATA: {metadata_file}")
         
         return {
-            "document_id": output_path.name,
-            "main_folder": str(output_path),
-            "parsed_markdown_folder": str(parsed_md_dir),
+            "main_folder": str(document_folder),
+            "parsed_markdown_folder": str(parsed_markdown_folder),
             "saved_files": saved_files,
-            "metadata_file": str(metadata_file)
+            "metadata_file": str(metadata_file),
+            "total_documents": len(parsed_docs)
         }
 
 

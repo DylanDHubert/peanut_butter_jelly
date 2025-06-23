@@ -35,6 +35,7 @@ from typing import Optional, Dict, Any
 from .peanut import Peanut
 from .butter import Butter
 from .jelly import Jelly
+from .config import PipelineConfig, create_config
 
 class Sandwich:
     """
@@ -44,21 +45,34 @@ class Sandwich:
     into one delicious document processing sandwich.
     """
     
-    def __init__(self, use_premium: bool = False, openai_model: str = "gpt-4"):
+    def __init__(self, config: Optional[PipelineConfig] = None, use_premium: bool = False, openai_model: str = "gpt-4"):
         """
         Initialize the Sandwich with pipeline configuration
-        
+    
         Args:
-            use_premium: Whether to use LlamaParse Premium mode
-            openai_model: OpenAI model for enhancement and cleaning
+            config: PipelineConfig object with all settings
+            use_premium: Whether to use LlamaParse Premium mode (overrides config)
+            openai_model: OpenAI model for enhancement and cleaning (overrides config)
         """
-        self.use_premium = use_premium
-        self.openai_model = openai_model
+        # LOAD CONFIGURATION - PRIORITY: config parameter > individual parameters > defaults
+        if config:
+            self.config = config
+            # OVERRIDE CONFIG WITH PROVIDED PARAMETERS
+            if use_premium:
+                self.config.use_premium_mode = use_premium
+            if openai_model:
+                self.config.openai_model = openai_model
+        else:
+            # CREATE CONFIG WITH PROVIDED PARAMETERS
+            self.config = create_config(
+                use_premium_mode=use_premium,
+                openai_model=openai_model
+            )
         
-        # INITIALIZE OUR PB&J COMPONENTS
-        self.peanut = Peanut(use_premium=use_premium)
-        self.butter = Butter(model=openai_model)
-        self.jelly = Jelly(model=openai_model)
+        # INITIALIZE OUR PB&J COMPONENTS WITH CONFIGURATION
+        self.peanut = Peanut(config=self.config)
+        self.butter = Butter(model=self.config.openai_model)
+        self.jelly = Jelly(model=self.config.openai_model)
     
     def process(self, pdf_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -116,8 +130,9 @@ class Sandwich:
                     "total_processing_time_seconds": total_time,
                     "pdf_source": pdf_path,
                     "document_folder": document_folder,
-                    "llamaparse_mode": "premium" if self.use_premium else "standard",
-                    "openai_model": self.openai_model
+                    "llamaparse_mode": "premium" if self.config.use_premium_mode else "standard",
+                    "openai_model": self.config.openai_model,
+                    "output_base_dir": self.config.output_base_dir
                 },
                 "stage_results": {
                     "stage_1_peanut_parse": {

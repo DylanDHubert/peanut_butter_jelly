@@ -327,7 +327,7 @@ ENHANCED OUTPUT:"""
                 json.dump(metadata, f, indent=2)
             
             print(f"UPDATED DOCUMENT METADATA: {metadata_file}")
-
+    
     def _save_enhanced_documents(self, enhanced_docs: List[EnhancedDocument], output_dir: str, source_folder: str):
         """Save enhanced documents to directory"""
         output_path = Path(output_dir)

@@ -1,0 +1,40 @@
+# 🥪 PB&J Pipeline Configuration
+# ==============================
+# 
+# This file configures the PB&J Pipeline for your project.
+# The pipeline will automatically load this file if it's in your project root.
+#
+# Configuration Priority (highest to lowest):
+# 1. Environment variables
+# 2. This config file
+# 3. .env file
+# 4. Default values
+
+# API KEYS
+# --------
+# Set your API keys here or use environment variables for security
+llamaparse_api_key: "your_llamaparse_api_key_here"  # Or set LLAMAPARSE_API_KEY env var
+openai_api_key: "your_openai_api_key_here"          # Or set OPENAI_API_KEY env var
+
+# OUTPUT SETTINGS
+# --------------
+# Where processed documents will be saved
+output_base_dir: "processed_documents"              # Base directory for all output
+create_timestamped_folders: true                    # Create timestamped folders for each run
+preserve_original_structure: true                   # Keep original folder structure
+
+# LLAMAPARSE SETTINGS
+# -------------------
+use_premium_mode: true                             # Use Premium mode for better quality (costs more)
+page_separator: "\n---\n"                          # How to separate pages in markdown
+max_timeout: 180                                   # Maximum processing time in seconds
+
+# OPENAI SETTINGS
+# ---------------
+openai_model: "gpt-4"                              # Model for enhancement and cleaning
+max_tokens: 4000                                   # Maximum tokens per request
+
+# PROCESSING SETTINGS
+# -------------------
+enable_verbose_logging: true                       # Show detailed processing logs
+save_intermediate_files: true                      # Save files from each pipeline stage 
