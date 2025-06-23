@@ -10,7 +10,7 @@ STAGE 3: Enhanced Markdown → Clean JSON (OpenAI Extraction)
 
 from pdf_processor import process_pdf
 from markdown_enhancer import enhance_markdown_folder
-from data_cleaner import clean_data_folder
+from data_cleaner import clean_enhanced_documents, clean_data_folder
 from pathlib import Path
 import json
 import time
@@ -80,7 +80,7 @@ def complete_pipeline(pdf_path: str, output_base_dir: str = "data", use_premium:
     
     stage3_start = time.time()
     final_json = f"{output_base_dir}/final_{raw_markdown_dir.name}.json"
-    processed_pages = clean_data_folder(enhanced_dir, final_json, model=model)
+    processed_pages = clean_enhanced_documents(enhanced_docs, final_json, model=model)
     stage3_time = time.time() - stage3_start
     
     print(f"✅ STAGE 3 COMPLETE: {stage3_time:.2f}s")

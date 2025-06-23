@@ -69,55 +69,37 @@ class DataCleaner:
         self.client = OpenAI(api_key=self.api_key)
         self.model = model
         
+        # LOAD PROMPTS FROM CONFIG FILE
+        self.prompts = self._load_prompts()
+        
         print(f"INITIALIZED DATA CLEANER WITH MODEL: {model}")
     
-    def _create_cleaning_prompt(self, markdown_content: str) -> str:
-        """Create the prompt for OpenAI to clean and standardize the data"""
+    def _load_prompts(self):
+        """Load prompts from config file"""
+        config_path = Path("config/data_cleaner_prompts.txt")
         
-        return f"""You are an expert data cleaning agent. Your task is to convert enhanced markdown content into clean, standardized JSON format optimized for RAG systems.
-
-INPUT: Enhanced markdown content with improved column names, integrated context, and better structure
-
-OUTPUT: Clean JSON with this exact structure:
-{{
-  "title": "Main page/section title",
-  "summary": "2-3 sentence summary of the content",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "tables": [
-    {{
-      "table_id": "table_1",
-      "title": "Descriptive table title",
-      "description": "What this table contains",
-      "columns": ["Column1", "Column2", "Column3"],
-      "rows": [
-        ["value1", "value2", "value3"],
-        ["value4", "value5", "value6"]
-      ],
-      "metadata": {{
-        "row_count": 2,
-        "column_count": 3,
-        "data_types": ["text", "number", "boolean"],
-        "notes": "Any important notes about this table"
-      }}
-    }}
-  ]
-}}
-
-CLEANING RULES:
-1. CONSOLIDATE similar tables into single comprehensive tables
-2. USE ENHANCED COLUMN NAMES (already improved by enhancement stage)
-3. CONVERT boolean values (TRUE/FALSE) to consistent format
-4. EXTRACT meaningful titles from content context
-5. CREATE descriptive summaries focusing on technical/medical content
-6. GENERATE relevant keywords for search/retrieval
-7. PRESERVE all data accuracy - do not hallucinate missing values
-8. CLEAN numerical data (remove extra spaces, standardize formats)
-9. MERGE related tables that have same structure but different ranges
+        if not config_path.exists():
+            raise FileNotFoundError(f"Prompt config file not found: {config_path}")
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # PARSE SINGLE CLEANING PROMPT FROM CONFIG FILE
+        prompts = {}
+        if content.startswith('CLEANING_PROMPT_TEMPLATE:'):
+            prompts['cleaning_prompt'] = content.replace('CLEANING_PROMPT_TEMPLATE:\n', '').strip()
+        
+        return prompts
+    
+    def _create_cleaning_prompt(self, enhanced_content: str) -> str:
+        """Create the prompt for OpenAI to clean and standardize the enhanced markdown"""
+        
+        return f"""{self.prompts['cleaning_prompt']}
 
 ENHANCED MARKDOWN CONTENT:
-{markdown_content}
+{enhanced_content}
 
-Return ONLY the clean JSON object, no other text:"""
+JSON OUTPUT:"""
 
     async def process_file_async(self, markdown_file_path: str) -> ProcessedPage:
         """
@@ -266,6 +248,124 @@ Return ONLY the clean JSON object, no other text:"""
         print(f"   - {data['total_pages']} pages")
         print(f"   - {data['total_tables']} tables total")
 
+    async def process_enhanced_document_async(self, enhanced_doc) -> ProcessedPage:
+        """
+        Process an enhanced document using only enhanced content (original kept as backup)
+        
+        Args:
+            enhanced_doc: EnhancedDocument object with both versions
+            
+        Returns:
+            ProcessedPage: Cleaned and standardized data
+        """
+        print(f"PROCESSING ENHANCED DOCUMENT: {enhanced_doc.filename}")
+        
+        # USE ENHANCED CONTENT FOR EXTRACTION
+        prompt = self._create_cleaning_prompt(enhanced_doc.enhanced_content)
+        
+        try:
+            # CALL OPENAI TO CLEAN THE ENHANCED DATA
+            print("SENDING ENHANCED CONTENT TO OPENAI FOR CLEANING...")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are an expert data cleaning agent specializing in technical document processing."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,  # LOW TEMPERATURE FOR CONSISTENT OUTPUT
+                max_tokens=4000   # STANDARD LIMIT FOR SINGLE DOCUMENT
+            )
+            
+            # EXTRACT AND PARSE JSON RESPONSE
+            json_content = response.choices[0].message.content
+            if not json_content:
+                raise ValueError("Empty response from OpenAI")
+            cleaned_data = json.loads(json_content)
+            
+            # CONVERT TO STRUCTURED FORMAT
+            tables = []
+            for i, table_data in enumerate(cleaned_data.get("tables", [])):
+                table = ProcessedTable(
+                    table_id=table_data.get("table_id", f"table_{i+1}"),
+                    title=table_data.get("title", ""),
+                    description=table_data.get("description", ""),
+                    columns=table_data.get("columns", []),
+                    rows=table_data.get("rows", []),
+                    metadata=table_data.get("metadata", {})
+                )
+                tables.append(table)
+            
+            # CREATE PROCESSED PAGE WITH ENHANCEMENT INFO
+            processed_page = ProcessedPage(
+                page_id=Path(enhanced_doc.filename).stem,
+                title=cleaned_data.get("title", Path(enhanced_doc.filename).stem),
+                summary=cleaned_data.get("summary", ""),
+                keywords=cleaned_data.get("keywords", []),
+                tables=tables,
+                raw_content=enhanced_doc.enhanced_content,  # STORE ENHANCED VERSION
+                processing_metadata={
+                    "source_file": enhanced_doc.filename,
+                    "processed_at": datetime.now().isoformat(),
+                    "model_used": self.model,
+                    "tables_found": len(tables),
+                    "enhancement_applied": True,
+                    "enhancement_notes": enhanced_doc.enhancement_notes,
+                    "original_preserved": True,  # ORIGINAL CONTENT AVAILABLE AS BACKUP
+                    "data_integrity": "Enhanced content with all data preserved"
+                }
+            )
+            
+            print(f"✅ ENHANCED-PROCESSED: {len(tables)} tables, {len(cleaned_data.get('keywords', []))} keywords")
+            print(f"   📊 Using enhanced content with improved structure")
+            print(f"   🔧 Structure enhancements: {len(enhanced_doc.enhancement_notes)}")
+            print(f"   💾 Original content preserved as backup")
+            return processed_page
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON PARSING ERROR: {e}")
+            print(f"RAW RESPONSE: {response.choices[0].message.content}")
+            raise
+        except Exception as e:
+            print(f"❌ PROCESSING ERROR: {e}")
+            raise
+
+    def process_enhanced_document(self, enhanced_doc) -> ProcessedPage:
+        """Synchronous wrapper for enhanced document processing"""
+        return asyncio.run(self.process_enhanced_document_async(enhanced_doc))
+
+    def process_enhanced_documents(self, enhanced_docs: List, output_file: Optional[str] = None) -> List[ProcessedPage]:
+        """
+        Process a list of enhanced documents with dual content approach
+        
+        Args:
+            enhanced_docs: List of EnhancedDocument objects
+            output_file: Optional path to save consolidated JSON output
+            
+        Returns:
+            List[ProcessedPage]: All processed pages with data integrity
+        """
+        print(f"PROCESSING {len(enhanced_docs)} ENHANCED DOCUMENTS WITH DUAL APPROACH")
+        
+        # PROCESS EACH ENHANCED DOCUMENT
+        processed_pages = []
+        for enhanced_doc in enhanced_docs:
+            try:
+                processed_page = self.process_enhanced_document(enhanced_doc)
+                processed_pages.append(processed_page)
+            except Exception as e:
+                print(f"⚠️  FAILED TO PROCESS {enhanced_doc.filename}: {e}")
+                continue
+        
+        # SAVE CONSOLIDATED OUTPUT IF REQUESTED
+        if output_file:
+            self._save_processed_data(processed_pages, output_file)
+        
+        print(f"🎉 SUCCESSFULLY PROCESSED {len(processed_pages)}/{len(enhanced_docs)} ENHANCED DOCUMENTS")
+        return processed_pages
+
 
 # CONVENIENCE FUNCTION FOR ONE-LINER USAGE
 def clean_data_folder(folder_path: str, output_file: Optional[str] = None, model: str = "gpt-4") -> List[ProcessedPage]:
@@ -282,6 +382,22 @@ def clean_data_folder(folder_path: str, output_file: Optional[str] = None, model
     """
     cleaner = DataCleaner(model=model)
     return cleaner.process_folder(folder_path, output_file)
+
+# ENHANCED PIPELINE CONVENIENCE FUNCTION
+def clean_enhanced_documents(enhanced_docs: List, output_file: Optional[str] = None, model: str = "gpt-4") -> List[ProcessedPage]:
+    """
+    Simple function to clean enhanced documents with dual approach
+    
+    Args:
+        enhanced_docs: List of EnhancedDocument objects from markdown enhancer
+        output_file: Optional path to save consolidated JSON
+        model: OpenAI model to use
+        
+    Returns:
+        List[ProcessedPage]: Cleaned and standardized pages with data integrity
+    """
+    cleaner = DataCleaner(model=model)
+    return cleaner.process_enhanced_documents(enhanced_docs, output_file)
 
 
 if __name__ == "__main__":

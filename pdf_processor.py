@@ -46,6 +46,9 @@ class PDFProcessor:
                 "or pass it directly to the constructor."
             )
         
+        # LOAD PROMPTS FROM CONFIG FILE
+        prompts = self._load_prompts()
+        
         # CONFIGURE LLAMAPARSE WITH OPTIMIZED SETTINGS FOR TECHNICAL DOCUMENTS
         # USING NEW API PARAMETERS INSTEAD OF DEPRECATED parsing_instruction
         self.parser = LlamaParse(
@@ -59,28 +62,10 @@ class PDFProcessor:
             
             # NEW API: USE system_prompt_append INSTEAD OF DEPRECATED parsing_instruction
             # THIS APPENDS TO LLAMAPARSE'S SYSTEM PROMPT INSTEAD OF REPLACING IT
-            system_prompt_append=(
-                "Focus on perfect table extraction and text preservation. "
-                "For tables with visual indicators: carefully examine each cell for any visual markers "
-                "(filled shapes, checkmarks, bullets, symbols) and convert them to clear boolean values. "
-                "Maintain complete data ranges - if a pattern spans multiple columns, capture the full extent. "
-                "When multiple tables have identical structure but different ranges (e.g., sizes 1-2, 3-4 vs sizes 5-6, 7-8), "
-                "consolidate them into a single table by adding a 'Size Range' or equivalent column. "
-                "Avoid double-wide table formats when single consolidated tables are cleaner. "
-                "Preserve exact table structure with all numerical data and relationships intact. "
-                "Prioritize data accuracy over formatting aesthetics."
-            ),
+            system_prompt_append=prompts['system_prompt'],
             
             # ADD USER PROMPT FOR TABLE AND DATA EXTRACTION
-            user_prompt=(
-                "Extract all tables with maximum fidelity. For cells with visual markers, "
-                "convert to TRUE/FALSE or YES/NO. "
-                "Empty or unmarked cells should be FALSE/NO. "
-                "Ensure complete data ranges are captured without truncation at visual boundaries. "
-                "When you see multiple tables with the same column structure but different size ranges "
-                "(like separate tables for sizes 1-2/3-4 and 5-6/7-8), merge them into one comprehensive table "
-                "by adding a 'Size Range' column. This creates cleaner, more usable data structure."
-            ),
+            user_prompt=prompts['user_prompt'],
             
             # PREMIUM MODE SETTINGS FOR BETTER PARSING QUALITY
             premium_mode=use_premium,  # ENABLE PREMIUM MODE FOR COMPLEX DOCUMENTS
@@ -97,6 +82,28 @@ class PDFProcessor:
         
         # STORE MODE FOR REPORTING
         self.use_premium = use_premium
+    
+    def _load_prompts(self):
+        """Load prompts from config file"""
+        config_path = Path("config/pdf_processor_prompts.txt")
+        
+        if not config_path.exists():
+            raise FileNotFoundError(f"Prompt config file not found: {config_path}")
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # PARSE PROMPTS FROM CONFIG FILE
+        prompts = {}
+        sections = content.split('\n\n')
+        
+        for section in sections:
+            if section.startswith('SYSTEM_PROMPT_APPEND:'):
+                prompts['system_prompt'] = section.replace('SYSTEM_PROMPT_APPEND:\n', '').strip()
+            elif section.startswith('USER_PROMPT:'):
+                prompts['user_prompt'] = section.replace('USER_PROMPT:\n', '').strip()
+        
+        return prompts
     
     async def parse_pdf_async(self, pdf_path: str) -> List[ParsedDocument]:
         """

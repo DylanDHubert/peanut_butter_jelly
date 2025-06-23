@@ -21,11 +21,11 @@ load_dotenv()
 
 @dataclass
 class EnhancedDocument:
-    """Container for enhanced markdown document"""
-    content: str
+    """Container for enhanced markdown document with original preserved"""
+    enhanced_content: str
+    original_content: str
     filename: str
     enhancement_timestamp: datetime
-    original_content: str
     enhancement_notes: List[str]
 
 class MarkdownEnhancer:
@@ -59,62 +59,32 @@ class MarkdownEnhancer:
         self.client = OpenAI(api_key=self.api_key)
         self.model = model
         
+        # LOAD PROMPTS FROM CONFIG FILE
+        self.prompts = self._load_prompts()
+        
         print(f"INITIALIZED MARKDOWN ENHANCER WITH MODEL: {model}")
     
-    def _create_enhancement_prompt(self, markdown_content: str) -> str:
-        """Create the prompt for OpenAI to enhance the markdown"""
+    def _load_prompts(self):
+        """Load prompts from config file"""
+        config_path = Path("config/markdown_enhancer_prompts.txt")
         
-        return f"""You are an expert document enhancement specialist. Your task is to take raw PDF parsing output and enhance the markdown structure for better data extraction.
-
-INPUT: Raw markdown from PDF parsing (may have generic column names, missing context, separated legends)
-
-ENHANCEMENT GOALS:
-1. IMPROVE TABLE HEADERS with full descriptive names
-2. INTEGRATE FOOTNOTES and legends into table context
-3. STANDARDIZE UNITS and formatting
-4. RESOLVE CROSS-REFERENCES and abbreviations
-5. CLEAN UP structure while preserving all data
-
-SPECIFIC ENHANCEMENT RULES:
-
-COLUMN NAME ENHANCEMENT:
-- Look for patterns like "A: Anterior-Posterior" in text, mermaid diagrams, or footnotes
-- Replace generic headers like <th>A</th> with <th>A - Anterior Posterior</th>
-- Apply abbreviation expansions consistently throughout document
-- Use full descriptive names: "AP" → "Anterior Posterior", "ML" → "Medial Lateral"
-
-CONTEXT INTEGRATION:
-- Find footnotes (*, †, ‡) and integrate relevant info into table descriptions
-- Extract legend information from mermaid diagrams and apply to tables
-- Move important context from bottom of document to relevant table sections
-
-UNIT STANDARDIZATION:
-- Standardize unit representations: "(mm)", "millimeters", "in mm" → consistent format
-- Add units to column headers where missing but implied
-- Ensure measurement consistency throughout
-
-STRUCTURE CLEANUP:
-- Clean HTML table formatting (proper spacing, consistent structure)
-- Remove redundant information while preserving critical details
-- Ensure proper markdown formatting for downstream processing
-
-CROSS-REFERENCE RESOLUTION:
-- Follow asterisk references (*, **) to their definitions
-- Integrate referenced information into table metadata
-- Clarify size range relationships and compatibility notes
-
-PRESERVE CRITICAL ELEMENTS:
-- Keep all numerical data exactly as is
-- Maintain all TRUE/FALSE boolean values
-- Preserve table structure and relationships
-- Keep all mermaid diagrams and visual elements
-
-OUTPUT: Enhanced markdown with improved headers, integrated context, and cleaner structure. Return ONLY the enhanced markdown, no explanatory text.
-
-RAW MARKDOWN CONTENT:
-{markdown_content}
-
-ENHANCED MARKDOWN:"""
+        if not config_path.exists():
+            raise FileNotFoundError(f"Prompt config file not found: {config_path}")
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # PARSE PROMPTS FROM CONFIG FILE
+        prompts = {}
+        if content.startswith('ENHANCEMENT_PROMPT_TEMPLATE:'):
+            prompts['enhancement_prompt'] = content.replace('ENHANCEMENT_PROMPT_TEMPLATE:\n', '').strip()
+        
+        return prompts
+    
+    def _create_enhancement_prompt(self, markdown_content: str) -> str:
+        """Create the prompt for OpenAI to enhance the markdown structure only"""
+        
+        return self.prompts['enhancement_prompt'].format(markdown_content=markdown_content)
 
     async def enhance_markdown_async(self, markdown_content: str, filename: str) -> EnhancedDocument:
         """
@@ -158,10 +128,10 @@ ENHANCED MARKDOWN:"""
             
             # CREATE ENHANCED DOCUMENT
             enhanced_doc = EnhancedDocument(
-                content=enhanced_content,
+                enhanced_content=enhanced_content,
+                original_content=markdown_content,
                 filename=filename,
                 enhancement_timestamp=datetime.now(),
-                original_content=markdown_content,
                 enhancement_notes=enhancement_notes
             )
             
@@ -185,20 +155,7 @@ ENHANCED MARKDOWN:"""
         
         if len(enhanced_headers) > 0 and enhanced_headers != original_headers:
             notes.append("Improved table column names with descriptive labels")
-        
-        # CHECK FOR UNIT STANDARDIZATION
-        if '(mm)' in enhanced and ('millimeters' in original or 'mm' in original):
-            notes.append("Standardized unit representations")
-        
-        # CHECK FOR FOOTNOTE INTEGRATION
-        if enhanced.count('*') < original.count('*'):
-            notes.append("Integrated footnotes into table context")
-        
-        # CHECK FOR ABBREVIATION EXPANSION
-        if 'Anterior Posterior' in enhanced and 'A:' in original:
-            notes.append("Expanded abbreviations using document context")
-        
-        # CHECK FOR STRUCTURE CLEANUP
+              # CHECK FOR STRUCTURE CLEANUP
         enhanced_lines = len(enhanced.split('\n'))
         original_lines = len(original.split('\n'))
         if abs(enhanced_lines - original_lines) > 5:
@@ -289,7 +246,7 @@ ENHANCED MARKDOWN:"""
 
 ---
 
-{doc.content}
+{doc.enhanced_content}
 """
             
             with open(output_file, 'w', encoding='utf-8') as f:
