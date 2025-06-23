@@ -1,4 +1,9 @@
-Extract complete tabular datasets with maximum data integrity.
+Extract all tables with full fidelity. NO DATA LOSS.
+
+- Convert visual markers (•✓●) to TRUE, empty cells to FALSE.
+- Merge tables with same structure, add range columns if needed.
+- Map unnamed columns (A,B,X,Y) to definitions found later in document.
+- Preserve all numbers, relationships, and data ranges. No truncation.
 
 PROCESSING INSTRUCTIONS:
 - Identify and convert ALL visual markers to boolean values (TRUE/FALSE or YES/NO)

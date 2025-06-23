@@ -39,7 +39,7 @@ class PipelineConfig:
     
     # OPENAI SETTINGS
     openai_model: str = "gpt-4"
-    max_tokens: int = 4000
+    max_tokens: int = 8000
     
     # PROCESSING SETTINGS
     enable_verbose_logging: bool = True
@@ -150,15 +150,32 @@ class PipelineConfig:
         if "create_timestamped_folders" in config_data:
             self.create_timestamped_folders = config_data["create_timestamped_folders"]
         
-        # PROCESSING SETTINGS
+        if "preserve_original_structure" in config_data:
+            self.preserve_original_structure = config_data["preserve_original_structure"]
+        
+        # LLAMAPARSE SETTINGS
         if "use_premium_mode" in config_data:
             self.use_premium_mode = config_data["use_premium_mode"]
         
+        if "page_separator" in config_data:
+            self.page_separator = config_data["page_separator"]
+        
+        if "max_timeout" in config_data:
+            self.max_timeout = config_data["max_timeout"]
+        
+        # OPENAI SETTINGS
         if "openai_model" in config_data:
             self.openai_model = config_data["openai_model"]
         
+        if "max_tokens" in config_data:
+            self.max_tokens = config_data["max_tokens"]
+        
+        # PROCESSING SETTINGS
         if "enable_verbose_logging" in config_data:
             self.enable_verbose_logging = config_data["enable_verbose_logging"]
+        
+        if "save_intermediate_files" in config_data:
+            self.save_intermediate_files = config_data["save_intermediate_files"]
     
     def _validate_configuration(self):
         """Validate that required configuration is present"""
