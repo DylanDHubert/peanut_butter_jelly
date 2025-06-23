@@ -5,4 +5,6 @@ Enhance markdown tables for clarity and context. NO DATA LOSS.
 - Standardize units, expand abbreviations
 - Clean markdown/HTML structure
 
-RULES: Never change, truncate, or omit any data row or value. Table size and all numbers/booleans must be identical. Only headers, descriptions, and context may be enhanced. 
+RULES: Never change, truncate, or omit any data row or value. Table size and all numbers/booleans must be identical. Only headers, descriptions, and context may be enhanced.
+
+CRITICAL: Never add HTML comments like "<!-- tables continue as before ..." or any continuation markers. Preserve COMPLETE table structures as they appear in the input. 

@@ -20,6 +20,9 @@ from dotenv import load_dotenv
 # LOAD ENVIRONMENT VARIABLES FROM .ENV FILE
 load_dotenv()
 
+# IMPORT CONFIGURATION
+from .config import PipelineConfig
+
 @dataclass
 class ProcessedTable:
     """Standardized table structure for RAG systems"""
@@ -49,13 +52,14 @@ class Jelly:
     optimized for RAG systems and consistent table structures.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", config: Optional[PipelineConfig] = None):
         """
         Initialize the data cleaner
         
         Args:
             api_key: OpenAI API key (if not provided, will try to get from env)
             model: OpenAI model to use for processing
+            config: PipelineConfig object with settings including max_tokens
         """
         # GET API KEY FROM ENVIRONMENT OR PARAMETER
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -69,10 +73,17 @@ class Jelly:
         self.client = OpenAI(api_key=self.api_key)
         self.model = model
         
+        # SET MAX TOKENS FROM CONFIG WITH SAFETY CHECK
+        if config and hasattr(config, 'max_tokens'):
+            # SAFETY CHECK: PREVENT CONTEXT OVERFLOW
+            self.max_tokens = min(config.max_tokens, 8192)
+        else:
+            self.max_tokens = 8192  # FALLBACK TO SAFE DEFAULT
+        
         # LOAD PROMPTS FROM CONFIG FILE
         self.prompts = self._load_prompts()
         
-        print(f"INITIALIZED DATA CLEANER WITH MODEL: {model}")
+        print(f"INITIALIZED DATA CLEANER WITH MODEL: {model}, MAX_TOKENS: {self.max_tokens}")
     
     def _load_prompts(self):
         """Load prompts from pantry - much cleaner approach"""
@@ -119,6 +130,12 @@ JSON OUTPUT:"""
         
         print(f"PROCESSING FILE: {file_path.name}")
         
+        # SAFETY CHECK: DETECT HTML COMMENTS IN INPUT
+        if '<!--' in markdown_content and '-->' in markdown_content:
+            print(f"⚠️  WARNING: HTML comments detected in input markdown for {file_path.name}")
+            print(f"   This may indicate data truncation from previous stage")
+            print(f"   HTML comment found: {markdown_content[markdown_content.find('<!--'):markdown_content.find('<!--')+100]}...")
+        
         # CREATE CLEANING PROMPT
         prompt = self._create_cleaning_prompt(markdown_content)
         
@@ -134,8 +151,8 @@ JSON OUTPUT:"""
                     },
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,  # LOW TEMPERATURE FOR CONSISTENT OUTPUT
-                max_tokens=4000
+                temperature=0.0,  # ZERO TEMPERATURE FOR DETERMINISTIC OUTPUT
+                max_tokens=self.max_tokens
             )
             
             # EXTRACT AND PARSE JSON RESPONSE
@@ -289,8 +306,20 @@ JSON OUTPUT:"""
         """
         print(f"PROCESSING ENHANCED DOCUMENT: {enhanced_doc.filename}")
         
+        # SAFETY CHECK: DETECT HTML COMMENTS IN ENHANCED CONTENT
+        if '<!--' in enhanced_doc.enhanced_content and '-->' in enhanced_doc.enhanced_content:
+            print(f"⚠️  WARNING: HTML comments detected in enhanced content for {enhanced_doc.filename}")
+            print(f"   Falling back to original content to preserve data integrity")
+            print(f"   HTML comment found: {enhanced_doc.enhanced_content[enhanced_doc.enhanced_content.find('<!--'):enhanced_doc.enhanced_content.find('<!--')+100]}...")
+            # USE ORIGINAL CONTENT INSTEAD OF ENHANCED
+            content_to_process = enhanced_doc.original_content
+            enhancement_applied = False
+        else:
+            content_to_process = enhanced_doc.enhanced_content
+            enhancement_applied = True
+        
         # USE ENHANCED CONTENT FOR EXTRACTION
-        prompt = self._create_cleaning_prompt(enhanced_doc.enhanced_content)
+        prompt = self._create_cleaning_prompt(content_to_process)
         
         try:
             # CALL OPENAI TO CLEAN THE ENHANCED DATA
@@ -304,8 +333,8 @@ JSON OUTPUT:"""
                     },
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,  # LOW TEMPERATURE FOR CONSISTENT OUTPUT
-                max_tokens=4000   # STANDARD LIMIT FOR SINGLE DOCUMENT
+                temperature=0.0,  # ZERO TEMPERATURE FOR DETERMINISTIC OUTPUT
+                max_tokens=self.max_tokens   # STANDARD LIMIT FOR SINGLE DOCUMENT
             )
             
             # EXTRACT AND PARSE JSON RESPONSE
@@ -334,13 +363,13 @@ JSON OUTPUT:"""
                 summary=cleaned_data.get("summary", ""),
                 keywords=cleaned_data.get("keywords", []),
                 tables=tables,
-                raw_content=enhanced_doc.enhanced_content,  # STORE ENHANCED VERSION
+                raw_content=content_to_process,  # STORE ENHANCED VERSION
                 processing_metadata={
                     "source_file": enhanced_doc.filename,
                     "processed_at": datetime.now().isoformat(),
                     "model_used": self.model,
                     "tables_found": len(tables),
-                    "enhancement_applied": True,
+                    "enhancement_applied": enhancement_applied,
                     "enhancement_notes": enhanced_doc.enhancement_notes,
                     "original_preserved": True,  # ORIGINAL CONTENT AVAILABLE AS BACKUP
                     "data_integrity": "Enhanced content with all data preserved"

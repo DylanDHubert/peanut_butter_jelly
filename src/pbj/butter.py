@@ -19,6 +19,9 @@ from dotenv import load_dotenv
 # LOAD ENVIRONMENT VARIABLES FROM .ENV FILE
 load_dotenv()
 
+# IMPORT CONFIGURATION
+from .config import PipelineConfig
+
 @dataclass
 class EnhancedDocument:
     """Container for enhanced markdown document with original preserved"""
@@ -39,13 +42,14 @@ class Butter:
     - Cross-reference resolution
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", config: Optional[PipelineConfig] = None):
         """
         Initialize the markdown enhancer
         
         Args:
             api_key: OpenAI API key (if not provided, will try to get from env)
             model: OpenAI model to use for enhancement
+            config: PipelineConfig object with settings including max_tokens
         """
         # GET API KEY FROM ENVIRONMENT OR PARAMETER
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -59,10 +63,17 @@ class Butter:
         self.client = OpenAI(api_key=self.api_key)
         self.model = model
         
+        # SET MAX TOKENS FROM CONFIG WITH SAFETY CHECK
+        if config and hasattr(config, 'max_tokens'):
+            # SAFETY CHECK: PREVENT CONTEXT OVERFLOW
+            self.max_tokens = min(config.max_tokens, 8192)
+        else:
+            self.max_tokens = 8192  # FALLBACK TO SAFE DEFAULT
+        
         # LOAD PROMPTS FROM CONFIG FILE
         self.prompts = self._load_prompts()
         
-        print(f"INITIALIZED MARKDOWN ENHANCER WITH MODEL: {model}")
+        print(f"INITIALIZED MARKDOWN ENHANCER WITH MODEL: {model}, MAX_TOKENS: {self.max_tokens}")
     
     def _load_prompts(self):
         """Load prompts from pantry - much cleaner approach"""
@@ -119,14 +130,21 @@ ENHANCED OUTPUT:"""
                     },
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,  # LOW TEMPERATURE FOR CONSISTENT OUTPUT
-                max_tokens=6000   # HIGHER LIMIT FOR LONGER DOCUMENTS
+                temperature=0.0,  # ZERO TEMPERATURE FOR DETERMINISTIC OUTPUT
+                max_tokens=self.max_tokens   # USE MAX_TOKENS FROM CONFIG
             )
             
             # EXTRACT ENHANCED CONTENT
             enhanced_content = response.choices[0].message.content
             if not enhanced_content:
                 raise ValueError("Empty response from OpenAI")
+            
+            # SAFETY CHECK: DETECT HTML COMMENTS AND FALLBACK TO ORIGINAL
+            if '<!--' in enhanced_content and '-->' in enhanced_content:
+                print(f"⚠️  WARNING: HTML comments detected in enhanced content for {filename}")
+                print(f"   Falling back to original markdown to preserve data integrity")
+                print(f"   HTML comment found: {enhanced_content[enhanced_content.find('<!--'):enhanced_content.find('<!--')+100]}...")
+                enhanced_content = markdown_content  # FALLBACK TO ORIGINAL
             
             # ANALYZE ENHANCEMENTS MADE
             enhancement_notes = self._analyze_enhancements(markdown_content, enhanced_content)

@@ -71,8 +71,8 @@ class Sandwich:
         
         # INITIALIZE OUR PB&J COMPONENTS WITH CONFIGURATION
         self.peanut = Peanut(config=self.config)
-        self.butter = Butter(model=self.config.openai_model)
-        self.jelly = Jelly(model=self.config.openai_model)
+        self.butter = Butter(model=self.config.openai_model, config=self.config)
+        self.jelly = Jelly(model=self.config.openai_model, config=self.config)
     
     def process(self, pdf_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """

@@ -5,6 +5,8 @@ Convert enhanced markdown to structured JSON. NO DATA LOSS.
 - Add technical summary, keywords, and table descriptions.
 - Output valid JSON: all input rows must appear in output, no truncation.
 
+CRITICAL: Never add HTML comments or continuation markers. Extract complete table structures exactly as they appear in the input.
+
 INPUT CONTEXT:
 - Enhanced markdown with improved headers and integrated context
 - Tables contain boolean values (TRUE/FALSE, YES/NO) from visual marker conversion
