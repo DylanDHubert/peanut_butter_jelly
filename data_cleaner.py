@@ -75,28 +75,26 @@ class DataCleaner:
         print(f"INITIALIZED DATA CLEANER WITH MODEL: {model}")
     
     def _load_prompts(self):
-        """Load prompts from config file"""
-        config_path = Path("config/data_cleaner_prompts.txt")
+        """Load prompts from simple text file - much cleaner approach"""
+        prompt_path = Path("config/data_cleaning_prompt.txt")
         
-        if not config_path.exists():
-            raise FileNotFoundError(f"Prompt config file not found: {config_path}")
+        if not prompt_path.exists():
+            raise FileNotFoundError(f"Cleaning prompt file not found: {prompt_path}")
         
-        with open(config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # LOAD PROMPT FROM SIMPLE TEXT FILE
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            cleaning_prompt = f.read().strip()
         
-        # PARSE SINGLE CLEANING PROMPT FROM CONFIG FILE
-        prompts = {}
-        if content.startswith('CLEANING_PROMPT_TEMPLATE:'):
-            prompts['cleaning_prompt'] = content.replace('CLEANING_PROMPT_TEMPLATE:\n', '').strip()
-        
-        return prompts
+        return {
+            'cleaning_prompt': cleaning_prompt
+        }
     
     def _create_cleaning_prompt(self, enhanced_content: str) -> str:
         """Create the prompt for OpenAI to clean and standardize the enhanced markdown"""
         
         return f"""{self.prompts['cleaning_prompt']}
 
-ENHANCED MARKDOWN CONTENT:
+ENHANCED MARKDOWN CONTENT TO PROCESS:
 {enhanced_content}
 
 JSON OUTPUT:"""
@@ -366,11 +364,176 @@ JSON OUTPUT:"""
         print(f"🎉 SUCCESSFULLY PROCESSED {len(processed_pages)}/{len(enhanced_docs)} ENHANCED DOCUMENTS")
         return processed_pages
 
+    def process_document_folder(self, document_folder_path: str) -> List[ProcessedPage]:
+        """
+        Process enhanced documents from a document folder structure (Stage 3)
+        
+        Args:
+            document_folder_path: Path to document folder containing 02_enhanced_markdown subfolder
+            
+        Returns:
+            List[ProcessedPage]: All processed pages with individual and combined saves
+        """
+        doc_folder = Path(document_folder_path)
+        if not doc_folder.exists():
+            raise FileNotFoundError(f"Document folder not found: {document_folder_path}")
+        
+        # FIND ENHANCED MARKDOWN SUBFOLDER
+        enhanced_md_folder = doc_folder / "02_enhanced_markdown"
+        if not enhanced_md_folder.exists():
+            raise FileNotFoundError(f"Enhanced markdown folder not found: {enhanced_md_folder}")
+        
+        # CREATE CLEANED JSON SUBFOLDER
+        cleaned_json_folder = doc_folder / "03_cleaned_json"
+        cleaned_json_folder.mkdir(exist_ok=True)
+        
+        # FIND ALL ENHANCED MARKDOWN FILES
+        md_files = list(enhanced_md_folder.glob("*.md"))
+        if not md_files:
+            raise ValueError(f"No enhanced markdown files found in: {enhanced_md_folder}")
+        
+        print(f"FOUND {len(md_files)} ENHANCED MARKDOWN FILES TO PROCESS IN DOCUMENT FOLDER")
+        
+        # PROCESS EACH FILE AND SAVE IMMEDIATELY
+        processed_pages = []
+        for md_file in sorted(md_files):
+            try:
+                # PROCESS THE ENHANCED MARKDOWN
+                processed_page = self.process_file(str(md_file))
+                processed_pages.append(processed_page)
+                
+                # SAVE INDIVIDUAL JSON FILE IMMEDIATELY
+                self._save_single_processed_page(processed_page, cleaned_json_folder, doc_folder.name)
+                
+            except Exception as e:
+                print(f"⚠️  FAILED TO PROCESS {md_file.name}: {e}")
+                continue
+        
+        # CREATE FINAL COMBINED OUTPUT
+        final_output_file = doc_folder / "final_output.json"
+        self._save_final_combined_output(processed_pages, final_output_file)
+        
+        # UPDATE DOCUMENT METADATA
+        self._update_document_metadata_cleaning(doc_folder, "03_cleaned_json", processed_pages)
+        
+        print(f"🎉 STAGE 3 COMPLETE - PROCESSED {len(processed_pages)}/{len(md_files)} FILES")
+        print(f"   📄 Individual JSON files saved in: {cleaned_json_folder}")
+        print(f"   📋 Final combined output: {final_output_file}")
+        return processed_pages
 
-# CONVENIENCE FUNCTION FOR ONE-LINER USAGE
+    def _save_single_processed_page(self, processed_page: ProcessedPage, output_folder: Path, document_id: str):
+        """Save a single processed page as JSON immediately after processing"""
+        output_file = output_folder / f"{processed_page.page_id}.json"
+        
+        # ADD DOCUMENT ID TO METADATA
+        processed_page.processing_metadata["document_id"] = document_id
+        processed_page.processing_metadata["stage"] = "03_cleaned_json"
+        
+        # CONVERT TO SERIALIZABLE FORMAT
+        page_data = asdict(processed_page)
+        
+        # SAVE INDIVIDUAL JSON FILE
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(page_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"SAVED CLEANED PAGE JSON: {output_file}")
+
+    def _save_final_combined_output(self, processed_pages: List[ProcessedPage], output_file: Path):
+        """Save the final combined JSON output for the entire document"""
+        # CREATE COMPREHENSIVE FINAL OUTPUT
+        final_data = {
+            "document_info": {
+                "document_id": processed_pages[0].processing_metadata.get("document_id", "unknown") if processed_pages else "unknown",
+                "processed_at": datetime.now().isoformat(),
+                "total_pages": len(processed_pages),
+                "total_tables": sum(len(page.tables) for page in processed_pages),
+                "total_keywords": len(set().union(*[page.keywords for page in processed_pages])) if processed_pages else 0,
+                "processing_pipeline": ["01_parsed_markdown", "02_enhanced_markdown", "03_cleaned_json"]
+            },
+            "document_summary": {
+                "combined_keywords": list(set().union(*[page.keywords for page in processed_pages])) if processed_pages else [],
+                "page_titles": [page.title for page in processed_pages],
+                "table_summary": [
+                    {
+                        "page_id": page.page_id,
+                        "page_title": page.title,
+                        "table_count": len(page.tables),
+                        "table_titles": [table.title for table in page.tables]
+                    }
+                    for page in processed_pages
+                ]
+            },
+            "pages": [asdict(page) for page in processed_pages]
+        }
+        
+        # SAVE FINAL COMBINED OUTPUT
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(final_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"💾 SAVED FINAL COMBINED OUTPUT: {output_file}")
+        print(f"   📊 {final_data['document_info']['total_pages']} pages")
+        print(f"   📋 {final_data['document_info']['total_tables']} tables total")
+        print(f"   🔍 {final_data['document_info']['total_keywords']} unique keywords")
+
+    def _update_document_metadata_cleaning(self, doc_folder: Path, stage: str, processed_pages: List[ProcessedPage]):
+        """Update the document metadata with cleaning stage info"""
+        metadata_file = doc_folder / "document_metadata.json"
+        
+        if metadata_file.exists():
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+            
+            # UPDATE STAGES COMPLETED
+            if stage not in metadata.get("stages_completed", []):
+                metadata["stages_completed"].append(stage)
+            
+            # ADD CLEANING INFO
+            metadata[f"{stage}_info"] = {
+                "processed_at": datetime.now().isoformat(),
+                "pages_processed": len(processed_pages),
+                "total_tables_extracted": sum(len(page.tables) for page in processed_pages),
+                "unique_keywords": len(set().union(*[page.keywords for page in processed_pages])) if processed_pages else 0,
+                "processing_summary": {
+                    page.page_id: {
+                        "title": page.title,
+                        "tables": len(page.tables),
+                        "keywords": len(page.keywords)
+                    }
+                    for page in processed_pages
+                }
+            }
+            
+            # MARK PIPELINE AS COMPLETE
+            metadata["pipeline_complete"] = True
+            metadata["final_output_ready"] = True
+            
+            # SAVE UPDATED METADATA
+            with open(metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=2)
+            
+            print(f"UPDATED DOCUMENT METADATA: {metadata_file}")
+            print(f"🎉 PIPELINE COMPLETE - ALL STAGES FINISHED")
+
+
+# CONVENIENCE FUNCTION FOR DOCUMENT FOLDER PROCESSING
+def process_document_folder(document_folder_path: str, model: str = "gpt-4") -> List[ProcessedPage]:
+    """
+    Simple function to process enhanced documents from a document folder structure
+    
+    Args:
+        document_folder_path: Path to document folder containing 02_enhanced_markdown subfolder
+        model: OpenAI model to use
+        
+    Returns:
+        List[ProcessedPage]: Processed pages with individual and combined saves
+    """
+    cleaner = DataCleaner(model=model)
+    return cleaner.process_document_folder(document_folder_path)
+
+# CONVENIENCE FUNCTION FOR ONE-LINER USAGE (Legacy)
 def clean_data_folder(folder_path: str, output_file: Optional[str] = None, model: str = "gpt-4") -> List[ProcessedPage]:
     """
-    Simple function to clean a folder of markdown files
+    Simple function to clean a folder of markdown files (Legacy for backwards compatibility)
     
     Args:
         folder_path: Path to folder containing LlamaParse markdown output
@@ -383,10 +546,10 @@ def clean_data_folder(folder_path: str, output_file: Optional[str] = None, model
     cleaner = DataCleaner(model=model)
     return cleaner.process_folder(folder_path, output_file)
 
-# ENHANCED PIPELINE CONVENIENCE FUNCTION
+# ENHANCED PIPELINE CONVENIENCE FUNCTION (Legacy)
 def clean_enhanced_documents(enhanced_docs: List, output_file: Optional[str] = None, model: str = "gpt-4") -> List[ProcessedPage]:
     """
-    Simple function to clean enhanced documents with dual approach
+    Simple function to clean enhanced documents with dual approach (Legacy for backwards compatibility)
     
     Args:
         enhanced_docs: List of EnhancedDocument objects from markdown enhancer

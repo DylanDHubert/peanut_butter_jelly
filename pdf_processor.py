@@ -6,7 +6,7 @@ Sends PDFs to LlamaParse API and returns clean markdown documents
 import os
 import asyncio
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -84,26 +84,27 @@ class PDFProcessor:
         self.use_premium = use_premium
     
     def _load_prompts(self):
-        """Load prompts from config file"""
-        config_path = Path("config/pdf_processor_prompts.txt")
+        """Load prompts from simple text files - much cleaner approach"""
+        system_prompt_path = Path("config/pdf_system_prompt.txt")
+        user_prompt_path = Path("config/pdf_user_prompt.txt")
         
-        if not config_path.exists():
-            raise FileNotFoundError(f"Prompt config file not found: {config_path}")
+        # CHECK IF FILES EXIST
+        if not system_prompt_path.exists():
+            raise FileNotFoundError(f"System prompt file not found: {system_prompt_path}")
+        if not user_prompt_path.exists():
+            raise FileNotFoundError(f"User prompt file not found: {user_prompt_path}")
         
-        with open(config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # LOAD PROMPTS FROM SIMPLE TEXT FILES
+        with open(system_prompt_path, 'r', encoding='utf-8') as f:
+            system_prompt = f.read().strip()
         
-        # PARSE PROMPTS FROM CONFIG FILE
-        prompts = {}
-        sections = content.split('\n\n')
+        with open(user_prompt_path, 'r', encoding='utf-8') as f:
+            user_prompt = f.read().strip()
         
-        for section in sections:
-            if section.startswith('SYSTEM_PROMPT_APPEND:'):
-                prompts['system_prompt'] = section.replace('SYSTEM_PROMPT_APPEND:\n', '').strip()
-            elif section.startswith('USER_PROMPT:'):
-                prompts['user_prompt'] = section.replace('USER_PROMPT:\n', '').strip()
-        
-        return prompts
+        return {
+            'system_prompt': system_prompt,
+            'user_prompt': user_prompt
+        }
     
     async def parse_pdf_async(self, pdf_path: str) -> List[ParsedDocument]:
         """
@@ -179,35 +180,51 @@ class PDFProcessor:
         # RUN ASYNC FUNCTION SYNCHRONOUSLY
         return asyncio.run(self.parse_pdf_async(pdf_path))
     
-    def save_parsed_documents(self, parsed_docs: List[ParsedDocument], output_dir: Optional[str] = None) -> List[str]:
+    def save_parsed_documents(self, parsed_docs: List[ParsedDocument], output_dir: Optional[str] = None, source_pdf_path: Optional[str] = None) -> Dict[str, Any]:
         """
-        Save parsed documents to organized data directory with timestamps
+        Save parsed documents to organized per-document directory structure
         
         Args:
             parsed_docs: List of ParsedDocument objects to save
             output_dir: Custom output directory (if None, will create timestamped directory)
+            source_pdf_path: Path to original PDF file to copy to output
             
         Returns:
-            List[str]: Paths to the saved files
+            Dict[str, Any]: Information about the created directory structure
         """
-        # CREATE ORGANIZED DATA DIRECTORY STRUCTURE
+        # CREATE ORGANIZED PER-DOCUMENT DIRECTORY STRUCTURE
         if output_dir is None:
             # CREATE TIMESTAMPED DIRECTORY WITH MODE IDENTIFIER
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             mode_suffix = "premium" if self.use_premium else "standard"
-            run_id = f"{timestamp}_{mode_suffix}"
+            if source_pdf_path:
+                pdf_name = Path(source_pdf_path).stem
+                run_id = f"{pdf_name}_{timestamp}_{mode_suffix}"
+            else:
+                run_id = f"document_{timestamp}_{mode_suffix}"
             output_path = Path("data") / run_id
         else:
             output_path = Path(output_dir)
         
-        # CREATE OUTPUT DIRECTORY
+        # CREATE MAIN DOCUMENT DIRECTORY
         output_path.mkdir(parents=True, exist_ok=True)
+        
+        # CREATE SUBDIRECTORIES FOR ORGANIZED STORAGE
+        parsed_md_dir = output_path / "01_parsed_markdown"
+        parsed_md_dir.mkdir(exist_ok=True)
+        
+        # COPY ORIGINAL PDF TO DOCUMENT FOLDER
+        if source_pdf_path and Path(source_pdf_path).exists():
+            import shutil
+            pdf_dest = output_path / Path(source_pdf_path).name
+            shutil.copy2(source_pdf_path, pdf_dest)
+            print(f"COPIED ORIGINAL PDF: {pdf_dest}")
         
         saved_files = []
         
-        # SAVE EACH DOCUMENT TO A SEPARATE MARKDOWN FILE
+        # SAVE EACH DOCUMENT TO PARSED MARKDOWN SUBFOLDER
         for doc in parsed_docs:
-            output_file = output_path / doc.filename
+            output_file = parsed_md_dir / doc.filename
             
             # CREATE MARKDOWN FILE WITH COMPREHENSIVE METADATA HEADER
             content_with_metadata = f"""# {Path(doc.filename).stem.replace('_', ' ').title()}
@@ -215,7 +232,7 @@ class PDFProcessor:
 *Parsed from PDF using LlamaParse on {doc.parse_timestamp.strftime('%Y-%m-%d %H:%M:%S')}*
 *Processing time: {doc.parsing_time_seconds:.2f} seconds*
 *Mode: {'Premium' if self.use_premium else 'Standard'}*
-*Run ID: {output_path.name}*
+*Document ID: {output_path.name}*
 
 ---
 
@@ -226,32 +243,49 @@ class PDFProcessor:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(content_with_metadata)
             
-            print(f"SAVED: {output_file}")
+            print(f"SAVED PARSED PAGE: {output_file}")
             saved_files.append(str(output_file))
         
-        # CREATE METADATA FILE FOR THE RUN
-        metadata_file = output_path / "run_metadata.json"
-        run_metadata = {
-            "run_id": output_path.name,
+        # CREATE METADATA FILE FOR THE DOCUMENT
+        metadata_file = output_path / "document_metadata.json"
+        document_metadata = {
+            "document_id": output_path.name,
             "timestamp": datetime.now().isoformat(),
-            "mode": "premium" if self.use_premium else "standard",
+            "source_pdf": Path(source_pdf_path).name if source_pdf_path else None,
+            "parsing_mode": "premium" if self.use_premium else "standard",
             "processing_time_seconds": parsed_docs[0].parsing_time_seconds if parsed_docs else 0,
-            "document_count": len(parsed_docs),
+            "page_count": len(parsed_docs),
+            "stages_completed": ["01_parsed_markdown"],
+            "directory_structure": {
+                "main_folder": str(output_path),
+                "original_pdf": str(output_path / Path(source_pdf_path).name) if source_pdf_path else None,
+                "parsed_markdown": str(parsed_md_dir),
+                "enhanced_markdown": str(output_path / "02_enhanced_markdown"),
+                "cleaned_json": str(output_path / "03_cleaned_json"),
+                "final_output": str(output_path / "final_output.json")
+            },
             "files": [doc.filename for doc in parsed_docs]
         }
         
         import json
         with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(run_metadata, f, indent=2)
+            json.dump(document_metadata, f, indent=2)
         
-        print(f"SAVED RUN METADATA: {metadata_file}")
-        print(f"DATA STORED IN: {output_path}")
+        print(f"SAVED DOCUMENT METADATA: {metadata_file}")
+        print(f"DOCUMENT FOLDER CREATED: {output_path}")
+        print(f"STAGE 1 COMPLETE - PARSED MARKDOWN SAVED IN: {parsed_md_dir}")
         
-        return saved_files
+        return {
+            "document_id": output_path.name,
+            "main_folder": str(output_path),
+            "parsed_markdown_folder": str(parsed_md_dir),
+            "saved_files": saved_files,
+            "metadata_file": str(metadata_file)
+        }
 
 
 # SIMPLE CONVENIENCE FUNCTION FOR ONE-LINER USAGE
-def process_pdf(pdf_path: str, output_dir: Optional[str] = None, use_premium: bool = False) -> List[str]:
+def process_pdf(pdf_path: str, output_dir: Optional[str] = None, use_premium: bool = False) -> Dict[str, Any]:
     """
     Simple function to process a PDF and save the results
     
@@ -261,9 +295,9 @@ def process_pdf(pdf_path: str, output_dir: Optional[str] = None, use_premium: bo
         use_premium: Whether to use Premium mode for better quality (costs more)
         
     Returns:
-        List[str]: Paths to saved markdown files
+        Dict[str, Any]: Information about the created directory structure
     """
     # CREATE PROCESSOR AND PROCESS PDF IN ONE GO
     processor = PDFProcessor(use_premium=use_premium)
     parsed_docs = processor.parse_pdf(pdf_path)
-    return processor.save_parsed_documents(parsed_docs, output_dir)
+    return processor.save_parsed_documents(parsed_docs, output_dir, pdf_path)

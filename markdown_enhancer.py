@@ -65,26 +65,29 @@ class MarkdownEnhancer:
         print(f"INITIALIZED MARKDOWN ENHANCER WITH MODEL: {model}")
     
     def _load_prompts(self):
-        """Load prompts from config file"""
-        config_path = Path("config/markdown_enhancer_prompts.txt")
+        """Load prompts from simple text file - much cleaner approach"""
+        prompt_path = Path("config/markdown_enhancement_prompt.txt")
         
-        if not config_path.exists():
-            raise FileNotFoundError(f"Prompt config file not found: {config_path}")
+        if not prompt_path.exists():
+            raise FileNotFoundError(f"Enhancement prompt file not found: {prompt_path}")
         
-        with open(config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # LOAD PROMPT FROM SIMPLE TEXT FILE
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            enhancement_prompt = f.read().strip()
         
-        # PARSE PROMPTS FROM CONFIG FILE
-        prompts = {}
-        if content.startswith('ENHANCEMENT_PROMPT_TEMPLATE:'):
-            prompts['enhancement_prompt'] = content.replace('ENHANCEMENT_PROMPT_TEMPLATE:\n', '').strip()
-        
-        return prompts
+        return {
+            'enhancement_prompt': enhancement_prompt
+        }
     
     def _create_enhancement_prompt(self, markdown_content: str) -> str:
         """Create the prompt for OpenAI to enhance the markdown structure only"""
         
-        return self.prompts['enhancement_prompt'].format(markdown_content=markdown_content)
+        return f"""{self.prompts['enhancement_prompt']}
+
+MARKDOWN CONTENT TO ENHANCE:
+{markdown_content}
+
+ENHANCED OUTPUT:"""
 
     async def enhance_markdown_async(self, markdown_content: str, filename: str) -> EnhancedDocument:
         """
@@ -185,9 +188,113 @@ class MarkdownEnhancer:
         
         return self.enhance_markdown(markdown_content, file_path.name)
     
+    def enhance_document_folder(self, document_folder_path: str) -> List[EnhancedDocument]:
+        """
+        Enhance all markdown files from a document folder structure (Stage 2)
+        
+        Args:
+            document_folder_path: Path to document folder containing 01_parsed_markdown subfolder
+            
+        Returns:
+            List[EnhancedDocument]: All enhanced documents with individual saves
+        """
+        doc_folder = Path(document_folder_path)
+        if not doc_folder.exists():
+            raise FileNotFoundError(f"Document folder not found: {document_folder_path}")
+        
+        # FIND PARSED MARKDOWN SUBFOLDER
+        parsed_md_folder = doc_folder / "01_parsed_markdown"
+        if not parsed_md_folder.exists():
+            raise FileNotFoundError(f"Parsed markdown folder not found: {parsed_md_folder}")
+        
+        # CREATE ENHANCED MARKDOWN SUBFOLDER
+        enhanced_md_folder = doc_folder / "02_enhanced_markdown"
+        enhanced_md_folder.mkdir(exist_ok=True)
+        
+        # FIND ALL MARKDOWN FILES
+        md_files = list(parsed_md_folder.glob("*.md"))
+        if not md_files:
+            raise ValueError(f"No markdown files found in: {parsed_md_folder}")
+        
+        print(f"FOUND {len(md_files)} MARKDOWN FILES TO ENHANCE IN DOCUMENT FOLDER")
+        
+        # PROCESS EACH FILE AND SAVE IMMEDIATELY
+        enhanced_docs = []
+        for md_file in sorted(md_files):
+            try:
+                # ENHANCE THE DOCUMENT
+                enhanced_doc = self.enhance_file(str(md_file))
+                enhanced_docs.append(enhanced_doc)
+                
+                # SAVE IMMEDIATELY AFTER ENHANCEMENT
+                self._save_single_enhanced_document(enhanced_doc, enhanced_md_folder, doc_folder.name)
+                
+            except Exception as e:
+                print(f"⚠️  FAILED TO ENHANCE {md_file.name}: {e}")
+                continue
+        
+        # UPDATE DOCUMENT METADATA
+        self._update_document_metadata(doc_folder, "02_enhanced_markdown", enhanced_docs)
+        
+        print(f"🎉 STAGE 2 COMPLETE - ENHANCED {len(enhanced_docs)}/{len(md_files)} FILES IN: {enhanced_md_folder}")
+        return enhanced_docs
+
+    def _save_single_enhanced_document(self, enhanced_doc: EnhancedDocument, output_folder: Path, document_id: str):
+        """Save a single enhanced document immediately after processing"""
+        output_file = output_folder / enhanced_doc.filename
+        
+        # ADD ENHANCEMENT METADATA HEADER
+        content_with_metadata = f"""# {Path(enhanced_doc.filename).stem.replace('_', ' ').title()} (Enhanced)
+
+*Enhanced on {enhanced_doc.enhancement_timestamp.strftime('%Y-%m-%d %H:%M:%S')}*
+*Document ID: {document_id}*
+*Enhancements applied: {len(enhanced_doc.enhancement_notes)}*
+
+**Enhancement Notes:**
+{chr(10).join(f'- {note}' for note in enhanced_doc.enhancement_notes)}
+
+---
+
+{enhanced_doc.enhanced_content}
+"""
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(content_with_metadata)
+        
+        print(f"SAVED ENHANCED PAGE: {output_file}")
+
+    def _update_document_metadata(self, doc_folder: Path, stage: str, enhanced_docs: List[EnhancedDocument]):
+        """Update the document metadata with completed stage info"""
+        metadata_file = doc_folder / "document_metadata.json"
+        
+        if metadata_file.exists():
+            import json
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+            
+            # UPDATE STAGES COMPLETED
+            if stage not in metadata.get("stages_completed", []):
+                metadata["stages_completed"].append(stage)
+            
+            # ADD ENHANCEMENT INFO
+            metadata[f"{stage}_info"] = {
+                "enhanced_at": datetime.now().isoformat(),
+                "files_enhanced": len(enhanced_docs),
+                "enhancement_summary": {
+                    doc.filename: doc.enhancement_notes 
+                    for doc in enhanced_docs
+                }
+            }
+            
+            # SAVE UPDATED METADATA
+            with open(metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=2)
+            
+            print(f"UPDATED DOCUMENT METADATA: {metadata_file}")
+
     def enhance_folder(self, folder_path: str, output_dir: Optional[str] = None) -> List[EnhancedDocument]:
         """
-        Enhance all markdown files in a folder
+        Enhance all markdown files in a folder (Legacy method for backwards compatibility)
         
         Args:
             folder_path: Path to folder containing raw markdown files
@@ -275,10 +382,25 @@ class MarkdownEnhancer:
         print(f"ENHANCED DOCUMENTS STORED IN: {output_path}")
 
 
-# CONVENIENCE FUNCTION FOR ONE-LINER USAGE
+# CONVENIENCE FUNCTION FOR DOCUMENT FOLDER ENHANCEMENT
+def enhance_document_folder(document_folder_path: str, model: str = "gpt-4") -> List[EnhancedDocument]:
+    """
+    Simple function to enhance markdown from a document folder structure
+    
+    Args:
+        document_folder_path: Path to document folder containing 01_parsed_markdown subfolder
+        model: OpenAI model to use
+        
+    Returns:
+        List[EnhancedDocument]: Enhanced documents with individual saves
+    """
+    enhancer = MarkdownEnhancer(model=model)
+    return enhancer.enhance_document_folder(document_folder_path)
+
+# CONVENIENCE FUNCTION FOR ONE-LINER USAGE (Legacy)
 def enhance_markdown_folder(folder_path: str, output_dir: Optional[str] = None, model: str = "gpt-4") -> List[EnhancedDocument]:
     """
-    Simple function to enhance a folder of markdown files
+    Simple function to enhance a folder of markdown files (Legacy for backwards compatibility)
     
     Args:
         folder_path: Path to folder containing raw LlamaParse markdown

@@ -1,266 +1,220 @@
 #!/usr/bin/env python3
 """
-Complete Three-Stage PDF Processing Pipeline
-===========================================
+Complete RAG Document Processing Pipeline
+========================================
 
-STAGE 1: PDF → Raw Markdown (LlamaParse)
-STAGE 2: Raw Markdown → Enhanced Markdown (OpenAI Enhancement)
-STAGE 3: Enhanced Markdown → Clean JSON (OpenAI Extraction)
+FULL 3-STAGE PIPELINE WITH ORGANIZED FOLDER STRUCTURE:
+1. PDF Processing (LlamaParse) → 01_parsed_markdown/
+2. Markdown Enhancement (OpenAI) → 02_enhanced_markdown/ 
+3. Data Cleaning (OpenAI) → 03_cleaned_json/ + final_output.json
+
+FOLDER STRUCTURE PER DOCUMENT:
+document_folder/
+├── original.pdf                    # Original PDF file
+├── document_metadata.json          # Pipeline tracking metadata
+├── final_output.json              # Final combined JSON output
+├── 01_parsed_markdown/             # Stage 1: Raw LlamaParse output
+│   ├── page_1.md
+│   └── page_2.md
+├── 02_enhanced_markdown/           # Stage 2: Enhanced with better structure
+│   ├── page_1.md
+│   └── page_2.md
+└── 03_cleaned_json/               # Stage 3: Individual page JSON files
+    ├── page_1.json
+    └── page_2.json
 """
 
-from pdf_processor import process_pdf
-from markdown_enhancer import enhance_markdown_folder
-from data_cleaner import clean_enhanced_documents, clean_data_folder
-from pathlib import Path
+import os
+import sys
 import json
-import time
+from pathlib import Path
+from datetime import datetime
+from typing import Optional, Dict, Any
 
-def complete_pipeline(pdf_path: str, output_base_dir: str = "data", use_premium: bool = True, model: str = "gpt-4") -> dict:
+# IMPORT OUR PIPELINE MODULES
+from pdf_processor import PDFProcessor
+from markdown_enhancer import MarkdownEnhancer  
+from data_cleaner import DataCleaner
+
+def run_complete_pipeline(
+    pdf_path: str, 
+    output_dir: Optional[str] = None,
+    use_premium: bool = False,
+    openai_model: str = "gpt-4"
+) -> Dict[str, Any]:
     """
-    Run the complete three-stage PDF processing pipeline
+    Run the complete 3-stage RAG document processing pipeline
     
     Args:
-        pdf_path: Path to the PDF file
-        output_base_dir: Base directory for all outputs
-        use_premium: Whether to use Premium mode for LlamaParse
-        model: OpenAI model to use for enhancement and cleaning
+        pdf_path: Path to the PDF file to process
+        output_dir: Optional custom output directory
+        use_premium: Whether to use LlamaParse Premium mode
+        openai_model: OpenAI model for enhancement and cleaning
         
     Returns:
-        dict: Pipeline results with file paths and statistics
+        Dict[str, Any]: Complete pipeline results and folder structure info
     """
-    print("🚀 STARTING COMPLETE THREE-STAGE PIPELINE")
+    
+    print("🚀 STARTING COMPLETE RAG DOCUMENT PROCESSING PIPELINE")
     print("=" * 60)
     
-    pipeline_start = time.time()
-    results = {}
-    
-    # STAGE 1: PDF TO RAW MARKDOWN
-    print("\n📄 STAGE 1: PDF → RAW MARKDOWN (LlamaParse)")
-    print("-" * 40)
-    
-    stage1_start = time.time()
-    raw_markdown_files = process_pdf(pdf_path, use_premium=use_premium)
-    raw_markdown_dir = Path(raw_markdown_files[0]).parent
-    stage1_time = time.time() - stage1_start
-    
-    print(f"✅ STAGE 1 COMPLETE: {stage1_time:.2f}s")
-    print(f"   Raw markdown saved to: {raw_markdown_dir}")
-    
-    results['stage1'] = {
-        'time_seconds': stage1_time,
-        'output_dir': str(raw_markdown_dir),
-        'files': len(raw_markdown_files)
-    }
-    
-    # STAGE 2: RAW MARKDOWN TO ENHANCED MARKDOWN
-    print("\n🧠 STAGE 2: RAW MARKDOWN → ENHANCED MARKDOWN (AI Enhancement)")
-    print("-" * 40)
-    
-    stage2_start = time.time()
-    enhanced_dir = f"{output_base_dir}/enhanced_{raw_markdown_dir.name}"
-    enhanced_docs = enhance_markdown_folder(str(raw_markdown_dir), enhanced_dir, model=model)
-    stage2_time = time.time() - stage2_start
-    
-    print(f"✅ STAGE 2 COMPLETE: {stage2_time:.2f}s")
-    print(f"   Enhanced markdown saved to: {enhanced_dir}")
-    
-    # COUNT TOTAL ENHANCEMENTS
-    total_enhancements = sum(len(doc.enhancement_notes) for doc in enhanced_docs)
-    
-    results['stage2'] = {
-        'time_seconds': stage2_time,
-        'output_dir': enhanced_dir,
-        'files': len(enhanced_docs),
-        'total_enhancements': total_enhancements
-    }
-    
-    # STAGE 3: ENHANCED MARKDOWN TO CLEAN JSON
-    print("\n📊 STAGE 3: ENHANCED MARKDOWN → CLEAN JSON (AI Extraction)")
-    print("-" * 40)
-    
-    stage3_start = time.time()
-    final_json = f"{output_base_dir}/final_{raw_markdown_dir.name}.json"
-    processed_pages = clean_enhanced_documents(enhanced_docs, final_json, model=model)
-    stage3_time = time.time() - stage3_start
-    
-    print(f"✅ STAGE 3 COMPLETE: {stage3_time:.2f}s")
-    print(f"   Final JSON saved to: {final_json}")
-    
-    # COUNT TOTAL TABLES
-    total_tables = sum(len(page.tables) for page in processed_pages)
-    
-    results['stage3'] = {
-        'time_seconds': stage3_time,
-        'output_file': final_json,
-        'pages': len(processed_pages),
-        'total_tables': total_tables
-    }
-    
-    # PIPELINE SUMMARY
-    total_time = time.time() - pipeline_start
-    
-    print("\n🎉 COMPLETE PIPELINE FINISHED!")
-    print("=" * 60)
-    print(f"⏱️  TOTAL TIME: {total_time:.2f} seconds")
-    print(f"   Stage 1 (PDF Parse): {stage1_time:.2f}s ({stage1_time/total_time*100:.1f}%)")
-    print(f"   Stage 2 (Enhancement): {stage2_time:.2f}s ({stage2_time/total_time*100:.1f}%)")
-    print(f"   Stage 3 (JSON Extract): {stage3_time:.2f}s ({stage3_time/total_time*100:.1f}%)")
-    
-    print(f"\n📊 PROCESSING RESULTS:")
-    print(f"   📄 Pages processed: {len(processed_pages)}")
-    print(f"   🔧 Total enhancements: {total_enhancements}")
-    print(f"   🗂️  Tables extracted: {total_tables}")
-    print(f"   📁 Final output: {final_json}")
-    
-    results['pipeline_summary'] = {
-        'total_time_seconds': total_time,
-        'pdf_file': pdf_path,
-        'final_output': final_json,
-        'use_premium': use_premium,
-        'model_used': model,
-        'success': True
-    }
-    
-    return results
-
-def pipeline_comparison(pdf_path: str, output_base_dir: str = "data") -> dict:
-    """
-    Compare two-stage vs three-stage pipeline results
-    
-    Args:
-        pdf_path: Path to the PDF file
-        output_base_dir: Base directory for outputs
-        
-    Returns:
-        dict: Comparison results
-    """
-    print("🔬 PIPELINE COMPARISON: 2-STAGE vs 3-STAGE")
-    print("=" * 60)
-    
-    # RUN TWO-STAGE PIPELINE (ORIGINAL)
-    print("\n📊 RUNNING 2-STAGE PIPELINE (Original)")
-    print("-" * 40)
-    
-    two_stage_start = time.time()
-    raw_files = process_pdf(pdf_path, use_premium=True)
-    raw_dir = Path(raw_files[0]).parent
-    two_stage_json = f"{output_base_dir}/two_stage_{raw_dir.name}.json"
-    two_stage_pages = clean_data_folder(str(raw_dir), two_stage_json)
-    two_stage_time = time.time() - two_stage_start
-    
-    print(f"✅ 2-STAGE COMPLETE: {two_stage_time:.2f}s")
-    
-    # RUN THREE-STAGE PIPELINE (ENHANCED)
-    print("\n📊 RUNNING 3-STAGE PIPELINE (Enhanced)")
-    print("-" * 40)
-    
-    three_stage_results = complete_pipeline(pdf_path, output_base_dir, use_premium=True)
-    three_stage_time = three_stage_results['pipeline_summary']['total_time_seconds']
-    
-    # COMPARISON ANALYSIS
-    print("\n🔍 COMPARISON RESULTS")
-    print("=" * 60)
-    print(f"⏱️  Processing Time:")
-    print(f"   2-Stage: {two_stage_time:.2f}s")
-    print(f"   3-Stage: {three_stage_time:.2f}s")
-    print(f"   Overhead: {three_stage_time - two_stage_time:.2f}s ({(three_stage_time/two_stage_time - 1)*100:.1f}% increase)")
-    
-    print(f"\n📊 Enhancement Benefits:")
-    print(f"   Enhancements applied: {three_stage_results['stage2']['total_enhancements']}")
-    print(f"   Column improvements: Enhanced names and context")
-    print(f"   Structure cleanup: Integrated footnotes and legends")
-    
-    return {
-        'two_stage': {
-            'time_seconds': two_stage_time,
-            'output_file': two_stage_json,
-            'pages': len(two_stage_pages)
-        },
-        'three_stage': three_stage_results,
-        'improvement_overhead': three_stage_time - two_stage_time,
-        'overhead_percentage': (three_stage_time/two_stage_time - 1) * 100
-    }
-
-def batch_pipeline(pdf_files: list, output_base_dir: str = "data", use_premium: bool = True) -> dict:
-    """
-    Process multiple PDFs through the complete pipeline
-    
-    Args:
-        pdf_files: List of PDF file paths
-        output_base_dir: Base directory for outputs
-        use_premium: Whether to use Premium mode
-        
-    Returns:
-        dict: Batch processing results
-    """
-    print(f"🔄 BATCH PROCESSING: {len(pdf_files)} PDFs")
-    print("=" * 60)
-    
-    batch_start = time.time()
-    results = []
-    
-    for i, pdf_file in enumerate(pdf_files, 1):
-        print(f"\n📄 PROCESSING PDF {i}/{len(pdf_files)}: {Path(pdf_file).name}")
-        print("-" * 40)
-        
-        try:
-            pdf_results = complete_pipeline(pdf_file, output_base_dir, use_premium)
-            results.append(pdf_results)
-            print(f"✅ PDF {i} COMPLETE")
-        except Exception as e:
-            print(f"❌ PDF {i} FAILED: {e}")
-            results.append({'error': str(e), 'pdf_file': pdf_file})
-    
-    batch_time = time.time() - batch_start
-    successful = len([r for r in results if 'error' not in r])
-    
-    print(f"\n🎉 BATCH PROCESSING COMPLETE!")
-    print("=" * 60)
-    print(f"⏱️  Total time: {batch_time:.2f} seconds")
-    print(f"📊 Success rate: {successful}/{len(pdf_files)} ({successful/len(pdf_files)*100:.1f}%)")
-    print(f"⚡ Average per PDF: {batch_time/len(pdf_files):.2f} seconds")
-    
-    return {
-        'total_time_seconds': batch_time,
-        'total_pdfs': len(pdf_files),
-        'successful': successful,
-        'results': results
-    }
-
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) < 2:
-        print("Usage: python pipeline_complete.py <pdf_path> [comparison|batch]")
-        print("Examples:")
-        print("  python pipeline_complete.py test.pdf")
-        print("  python pipeline_complete.py test.pdf comparison")
-        print("  python pipeline_complete.py \"*.pdf\" batch")
-        sys.exit(1)
-    
-    pdf_path = sys.argv[1]
-    mode = sys.argv[2] if len(sys.argv) > 2 else "normal"
+    pipeline_start = datetime.now()
     
     try:
-        if mode == "comparison":
-            results = pipeline_comparison(pdf_path)
-        elif mode == "batch":
-            import glob
-            pdf_files = glob.glob(pdf_path)
-            if not pdf_files:
-                print(f"No PDF files found matching: {pdf_path}")
-                sys.exit(1)
-            results = batch_pipeline(pdf_files)
-        else:
-            results = complete_pipeline(pdf_path)
+        # STAGE 1: PDF PROCESSING WITH LLAMAPARSE
+        print("\n📄 STAGE 1: PDF PROCESSING WITH LLAMAPARSE")
+        print("-" * 40)
         
-        # SAVE RESULTS
-        results_file = f"pipeline_results_{int(time.time())}.json"
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
+        processor = PDFProcessor(use_premium=use_premium)
+        parsed_docs = processor.parse_pdf(pdf_path)
+        stage1_result = processor.save_parsed_documents(parsed_docs, output_dir, pdf_path)
         
-        print(f"\n💾 Pipeline results saved to: {results_file}")
+        document_folder = stage1_result["main_folder"]
+        print(f"✅ STAGE 1 COMPLETE - Document folder: {document_folder}")
+        
+        # STAGE 2: MARKDOWN ENHANCEMENT
+        print("\n🔧 STAGE 2: MARKDOWN ENHANCEMENT WITH OPENAI")
+        print("-" * 40)
+        
+        enhancer = MarkdownEnhancer(model=openai_model)
+        enhanced_docs = enhancer.enhance_document_folder(document_folder)
+        
+        print(f"✅ STAGE 2 COMPLETE - Enhanced {len(enhanced_docs)} documents")
+        
+        # STAGE 3: DATA CLEANING AND JSON EXTRACTION
+        print("\n🧹 STAGE 3: DATA CLEANING AND JSON EXTRACTION")
+        print("-" * 40)
+        
+        cleaner = DataCleaner(model=openai_model)
+        processed_pages = cleaner.process_document_folder(document_folder)
+        
+        print(f"✅ STAGE 3 COMPLETE - Processed {len(processed_pages)} pages")
+        
+        # PIPELINE COMPLETION SUMMARY
+        pipeline_end = datetime.now()
+        total_time = (pipeline_end - pipeline_start).total_seconds()
+        
+        print("\n🎉 COMPLETE PIPELINE FINISHED SUCCESSFULLY!")
+        print("=" * 60)
+        print(f"📁 Document Folder: {document_folder}")
+        print(f"⏱️  Total Processing Time: {total_time:.2f} seconds")
+        print(f"📄 Pages Processed: {len(processed_pages)}")
+        print(f"📊 Tables Extracted: {sum(len(page.tables) for page in processed_pages)}")
+        print(f"🔍 Unique Keywords: {len(set().union(*[page.keywords for page in processed_pages])) if processed_pages else 0}")
+        
+        # CREATE FINAL PIPELINE SUMMARY
+        pipeline_summary = {
+            "pipeline_info": {
+                "completed_at": pipeline_end.isoformat(),
+                "total_processing_time_seconds": total_time,
+                "pdf_source": pdf_path,
+                "document_folder": document_folder,
+                "llamaparse_mode": "premium" if use_premium else "standard",
+                "openai_model": openai_model
+            },
+            "stage_results": {
+                "stage_1_pdf_processing": {
+                    "pages_parsed": len(parsed_docs),
+                    "folder": stage1_result["parsed_markdown_folder"]
+                },
+                "stage_2_enhancement": {
+                    "documents_enhanced": len(enhanced_docs),
+                    "folder": str(Path(document_folder) / "02_enhanced_markdown")
+                },
+                "stage_3_cleaning": {
+                    "pages_processed": len(processed_pages),
+                    "individual_json_folder": str(Path(document_folder) / "03_cleaned_json"),
+                    "final_output": str(Path(document_folder) / "final_output.json")
+                }
+            },
+            "data_summary": {
+                "total_pages": len(processed_pages),
+                "total_tables": sum(len(page.tables) for page in processed_pages),
+                "unique_keywords": len(set().union(*[page.keywords for page in processed_pages])) if processed_pages else 0,
+                "page_titles": [page.title for page in processed_pages]
+            },
+            "folder_structure": {
+                "main_folder": document_folder,
+                "original_pdf": str(Path(document_folder) / Path(pdf_path).name),
+                "metadata": str(Path(document_folder) / "document_metadata.json"),
+                "final_output": str(Path(document_folder) / "final_output.json"),
+                "subfolders": {
+                    "parsed_markdown": str(Path(document_folder) / "01_parsed_markdown"),
+                    "enhanced_markdown": str(Path(document_folder) / "02_enhanced_markdown"),
+                    "cleaned_json": str(Path(document_folder) / "03_cleaned_json")
+                }
+            }
+        }
+        
+        # SAVE PIPELINE SUMMARY
+        summary_file = Path(document_folder) / "pipeline_summary.json"
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(pipeline_summary, f, indent=2, ensure_ascii=False)
+        
+        print(f"📋 Pipeline Summary Saved: {summary_file}")
+        
+        return pipeline_summary
         
     except Exception as e:
-        print(f"❌ PIPELINE ERROR: {e}")
-        sys.exit(1) 
+        print(f"\n❌ PIPELINE FAILED: {e}")
+        raise
+
+
+def main():
+    """Command line interface for the complete pipeline"""
+    
+    if len(sys.argv) < 2:
+        print("Usage: python pipeline_complete.py <pdf_path> [--premium] [--model MODEL]")
+        print("\nExamples:")
+        print("  python pipeline_complete.py test.pdf")
+        print("  python pipeline_complete.py document.pdf --premium")
+        print("  python pipeline_complete.py report.pdf --premium --model gpt-4")
+        print("\nOptions:")
+        print("  --premium    Use LlamaParse Premium mode (better quality, costs more)")
+        print("  --model      OpenAI model for enhancement/cleaning (default: gpt-4)")
+        sys.exit(1)
+    
+    # PARSE COMMAND LINE ARGUMENTS
+    pdf_path = sys.argv[1]
+    use_premium = "--premium" in sys.argv
+    
+    # GET MODEL ARGUMENT
+    openai_model = "gpt-4"  # DEFAULT
+    if "--model" in sys.argv:
+        model_index = sys.argv.index("--model")
+        if model_index + 1 < len(sys.argv):
+            openai_model = sys.argv[model_index + 1]
+    
+    # VALIDATE PDF FILE
+    if not Path(pdf_path).exists():
+        print(f"❌ ERROR: PDF file not found: {pdf_path}")
+        sys.exit(1)
+    
+    if not pdf_path.lower().endswith('.pdf'):
+        print(f"❌ ERROR: File must be a PDF: {pdf_path}")
+        sys.exit(1)
+    
+    # SHOW CONFIGURATION
+    print("PIPELINE CONFIGURATION:")
+    print(f"  📄 PDF File: {pdf_path}")
+    print(f"  🔧 LlamaParse Mode: {'Premium' if use_premium else 'Standard'}")
+    print(f"  🤖 OpenAI Model: {openai_model}")
+    print()
+    
+    try:
+        # RUN COMPLETE PIPELINE
+        result = run_complete_pipeline(
+            pdf_path=pdf_path,
+            use_premium=use_premium,
+            openai_model=openai_model
+        )
+        
+        print(f"\n🎯 SUCCESS! Check your results in: {result['folder_structure']['main_folder']}")
+        
+    except Exception as e:
+        print(f"\n💥 PIPELINE ERROR: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main() 
