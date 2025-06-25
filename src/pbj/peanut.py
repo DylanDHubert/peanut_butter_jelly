@@ -1,9 +1,9 @@
 """
-🥜 Peanut - Parse PDFs to Markdown
-=================================
+🥜 Peanut - PDF to Markdown Parser
+==================================
 
-The Parse stage of the PB&J Pipeline. Extracts raw content from PDFs 
-using LlamaParse API and returns clean markdown documents.
+Stage 1 of the PB&J Pipeline. Extracts raw content from PDFs using LlamaParse API
+and returns clean markdown documents optimized for technical and table-heavy content.
 """
 
 import os
@@ -29,8 +29,10 @@ class ParsedDocument:
 
 class Peanut:
     """
-    Simple PDF processor using LlamaParse
-    Optimized for technical and table-heavy documents
+    🥜 Peanut - PDF to Markdown Parser
+    
+    Stage 1 of the PB&J Pipeline. Extracts raw content from PDFs using LlamaParse API
+    and returns clean markdown documents optimized for technical and table-heavy content.
     """
     
     def __init__(self, config: Optional[PipelineConfig] = None, api_key: Optional[str] = None, use_premium: bool = False):

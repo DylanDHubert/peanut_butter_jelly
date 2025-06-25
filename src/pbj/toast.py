@@ -3,8 +3,8 @@
 🍞 Toast - JSON Format Converter
 ================================
 
-Converts PB&J pipeline output from column-based table format to row-based dictionary format.
-Makes JSON data more accessible and easier to query in downstream applications.
+Stage 4 of the PB&J Pipeline. Converts column-based table format to row-based dictionary
+format for better accessibility and easier querying in downstream applications.
 
 INPUT FORMAT (from PB&J):
 {
@@ -36,8 +36,8 @@ class Toast:
     """
     🍞 Toast - JSON Format Converter
     
-    Converts column-based table format to row-based dictionary format
-    for better accessibility and querying in downstream applications.
+    Stage 4 of the PB&J Pipeline. Converts column-based table format to row-based dictionary
+    format for better accessibility and querying in downstream applications.
     """
     
     def __init__(self):

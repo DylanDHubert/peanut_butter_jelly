@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Markdown Enhancement Pipeline
-============================
+🧈 Butter - Markdown Enhancement Processor
+=========================================
 
-STAGE 2: ENHANCE LLAMAPARSE MARKDOWN WITH BETTER CONTEXT AND STRUCTURE
+Stage 2 of the PB&J Pipeline. Enhances raw LlamaParse markdown with better structure,
+improved column names, integrated footnotes, and standardized formatting using OpenAI.
 """
 
 import os
@@ -33,13 +34,10 @@ class EnhancedDocument:
 
 class Butter:
     """
-    INTELLIGENT MARKDOWN ENHANCEMENT USING OPENAI
+    🧈 Butter - Markdown Enhancement Processor
     
-    Takes raw LlamaParse markdown and enhances it with:
-    - Better column names from document context
-    - Integrated footnotes and legends
-    - Standardized formatting
-    - Cross-reference resolution
+    Stage 2 of the PB&J Pipeline. Enhances raw LlamaParse markdown with better structure,
+    improved column names, integrated footnotes, and standardized formatting using OpenAI.
     """
     
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", config: Optional[PipelineConfig] = None):

@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-🥪 Sandwich - Complete PB&J Pipeline
-===================================
+🥪 Sandwich - Complete PB&J Pipeline Orchestrator
+=================================================
 
-FULL 3-STAGE PIPELINE WITH ORGANIZED FOLDER STRUCTURE:
-1. PDF Processing (LlamaParse) → 01_parsed_markdown/
-2. Markdown Enhancement (OpenAI) → 02_enhanced_markdown/ 
-3. Data Cleaning (OpenAI) → 03_cleaned_json/ + final_output.json
+Complete 4-stage document processing pipeline with organized folder structure:
+1. Peanut (Parse): PDF → Markdown using LlamaParse
+2. Butter (Better): Markdown → Enhanced Markdown using OpenAI
+3. Jelly (JSON): Enhanced Markdown → Structured JSON using OpenAI
+4. Toast (Format): Column-based → Row-based JSON conversion
 
 FOLDER STRUCTURE PER DOCUMENT:
 document_folder/
 ├── original.pdf                    # Original PDF file
 ├── document_metadata.json          # Pipeline tracking metadata
-├── final_output.json               # Final combined JSON output
+├── final_output.json               # Final combined JSON output (toasted format)
 ├── 01_parsed_markdown/             # Stage 1: Raw LlamaParse output
 │   ├── page_1.md
 │   └── page_2.md
@@ -42,8 +43,9 @@ class Sandwich:
     """
     🥪 Sandwich - Complete PB&J Pipeline Orchestrator
     
-    Combines Peanut (Parse), Butter (Better), and Jelly (JSON) 
-    into one delicious document processing sandwich.
+    Complete 4-stage document processing pipeline that combines Peanut (Parse), 
+    Butter (Better), Jelly (JSON), and Toast (Format) into one delicious document 
+    processing sandwich.
     """
     
     def __init__(self, config: Optional[PipelineConfig] = None, use_premium: bool = False, openai_model: str = "gpt-4"):

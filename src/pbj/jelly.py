@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Data Cleaning and Standardization Pipeline
-==========================================
+🍇 Jelly - JSON Data Extractor
+==============================
 
-SECOND-STAGE PROCESSING: CLEAN LLAMAPARSE OUTPUT INTO STANDARDIZED JSON
+Stage 3 of the PB&J Pipeline. Converts enhanced markdown to standardized JSON format
+optimized for RAG systems with consistent table structures and metadata extraction.
 """
 
 import os
@@ -46,10 +47,10 @@ class ProcessedPage:
 
 class Jelly:
     """
-    INTELLIGENT DATA CLEANING USING OPENAI
+    🍇 Jelly - JSON Data Extractor
     
-    Takes raw LlamaParse markdown output and converts to standardized JSON
-    optimized for RAG systems and consistent table structures.
+    Stage 3 of the PB&J Pipeline. Converts enhanced markdown to standardized JSON format
+    optimized for RAG systems with consistent table structures and metadata extraction.
     """
     
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4", config: Optional[PipelineConfig] = None):
