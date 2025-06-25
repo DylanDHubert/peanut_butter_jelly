@@ -112,7 +112,7 @@ ENHANCED MARKDOWN CONTENT TO PROCESS:
 
 JSON OUTPUT:"""
 
-    async def process_file_async(self, markdown_file_path: str) -> ProcessedPage:
+    async def process_file_async(self, markdown_file_path: str) -> Optional[ProcessedPage]:
         """
         Process a single markdown file and return cleaned data
         
@@ -196,12 +196,14 @@ JSON OUTPUT:"""
         except json.JSONDecodeError as e:
             print(f"❌ JSON PARSING ERROR: {e}")
             print(f"RAW RESPONSE: {response.choices[0].message.content}")
-            raise
+            print(f"   Skipping page {file_path.name} due to JSON parsing error")
+            return None  # Return None instead of raising to allow pipeline to continue
         except Exception as e:
             print(f"❌ PROCESSING ERROR: {e}")
-            raise
+            print(f"   Skipping page {file_path.name} due to error")
+            return None  # Return None instead of raising to allow pipeline to continue
     
-    def process(self, markdown_content: str, filename: str = "document.md") -> ProcessedPage:
+    def process(self, markdown_content: str, filename: str = "document.md") -> Optional[ProcessedPage]:
         """
         🍇 Process Markdown → JSON
         Main Jelly processing method
@@ -214,6 +216,8 @@ JSON OUTPUT:"""
         
         try:
             result = self.process_file(temp_path)
+            if result is None:
+                return None
             # UPDATE FILENAME IN RESULT
             result.page_id = Path(filename).stem
             result.processing_metadata["original_filename"] = filename
@@ -223,14 +227,14 @@ JSON OUTPUT:"""
             import os
             os.unlink(temp_path)
     
-    def process_async(self, markdown_file_path: str) -> ProcessedPage:
+    def process_async(self, markdown_file_path: str) -> Optional[ProcessedPage]:
         """
         🍇 Async Process markdown file → JSON
         Async Jelly processing method
         """
         return asyncio.run(self.process_file_async(markdown_file_path))
     
-    def process_file(self, markdown_file_path: str) -> ProcessedPage:
+    def process_file(self, markdown_file_path: str) -> Optional[ProcessedPage]:
         """Synchronous wrapper for file processing"""
         return asyncio.run(self.process_file_async(markdown_file_path))
     
@@ -258,17 +262,41 @@ JSON OUTPUT:"""
         
         # PROCESS EACH FILE
         processed_pages = []
+        skipped_pages = []
         for md_file in sorted(md_files):
             try:
                 processed_page = self.process_file(str(md_file))
+                if processed_page is None:
+                    # Page was skipped due to error
+                    skipped_pages.append({
+                        "filename": md_file.name,
+                        "error": "Processing failed - page skipped",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    print(f"⚠️  SKIPPED: {md_file.name} (processing failed)")
+                    continue
+                    
                 processed_pages.append(processed_page)
+                
+                # SAVE EACH PROCESSED PAGE IMMEDIATELY (PAGE-WISE SAVING)
+                self._save_single_processed_page(processed_page, Path(folder_path), Path(folder_path).name)
+                
+                print(f"✅ PROCESSED AND SAVED: {md_file.name}")
             except Exception as e:
-                print(f"⚠️  FAILED TO PROCESS {md_file.name}: {e}")
+                print(f"❌ FAILED TO PROCESS {md_file.name}: {e}")
+                skipped_pages.append({
+                    "filename": md_file.name,
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                })
                 continue
         
         # SAVE CONSOLIDATED OUTPUT IF REQUESTED
         if output_file:
             self._save_processed_data(processed_pages, output_file)
+        
+        # UPDATE DOCUMENT METADATA
+        self._update_document_metadata_cleaning(folder, "cleaning", processed_pages, skipped_pages)
         
         print(f"🎉 SUCCESSFULLY PROCESSED {len(processed_pages)}/{len(md_files)} FILES")
         return processed_pages
@@ -470,17 +498,33 @@ JSON OUTPUT:"""
         
         # PROCESS EACH FILE AND SAVE IMMEDIATELY
         processed_pages = []
+        skipped_pages = []
         for md_file in sorted(md_files):
             try:
-                # PROCESS THE ENHANCED MARKDOWN
                 processed_page = self.process_file(str(md_file))
+                if processed_page is None:
+                    # Page was skipped due to error
+                    skipped_pages.append({
+                        "filename": md_file.name,
+                        "error": "Processing failed - page skipped",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    print(f"⚠️  SKIPPED: {md_file.name} (processing failed)")
+                    continue
+                    
                 processed_pages.append(processed_page)
                 
-                # SAVE INDIVIDUAL JSON FILE IMMEDIATELY
+                # SAVE EACH PROCESSED PAGE IMMEDIATELY (PAGE-WISE SAVING)
                 self._save_single_processed_page(processed_page, cleaned_json_folder, doc_folder.name)
                 
+                print(f"✅ PROCESSED AND SAVED: {md_file.name}")
             except Exception as e:
-                print(f"⚠️  FAILED TO PROCESS {md_file.name}: {e}")
+                print(f"❌ FAILED TO PROCESS {md_file.name}: {e}")
+                skipped_pages.append({
+                    "filename": md_file.name,
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                })
                 continue
         
         # CREATE FINAL COMBINED OUTPUT
@@ -488,7 +532,7 @@ JSON OUTPUT:"""
         self._save_final_combined_output(processed_pages, final_output_file)
         
         # UPDATE DOCUMENT METADATA
-        self._update_document_metadata_cleaning(doc_folder, "03_cleaned_json", processed_pages)
+        self._update_document_metadata_cleaning(doc_folder, "cleaning", processed_pages, skipped_pages)
         
         print(f"🎉 STAGE 3 COMPLETE - PROCESSED {len(processed_pages)}/{len(md_files)} FILES")
         print(f"   📄 Individual JSON files saved in: {cleaned_json_folder}")
@@ -549,7 +593,7 @@ JSON OUTPUT:"""
         print(f"   📋 {final_data['document_info']['total_tables']} tables total")
         print(f"   🔍 {final_data['document_info']['total_keywords']} unique keywords")
 
-    def _update_document_metadata_cleaning(self, doc_folder: Path, stage: str, processed_pages: List[ProcessedPage]):
+    def _update_document_metadata_cleaning(self, doc_folder: Path, stage: str, processed_pages: List[ProcessedPage], skipped_pages: List[Dict]):
         """Update the document metadata with cleaning stage info"""
         metadata_file = doc_folder / "document_metadata.json"
         
@@ -578,7 +622,8 @@ JSON OUTPUT:"""
                         "keywords": len(page.keywords)
                     }
                     for page in processed_pages
-                }
+                },
+                "skipped_pages": skipped_pages
             }
             
             # MARK PIPELINE AS COMPLETE

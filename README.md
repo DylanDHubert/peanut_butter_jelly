@@ -1,6 +1,6 @@
 # PB&J Pipeline
 
-A Python RAG document processing pipeline that combines PDF parsing, markdown enhancement, and JSON extraction.
+A Python RAG document processing pipeline that combines PDF parsing, markdown enhancement, JSON extraction, and format conversion.
 
 ## API Keys
 
@@ -36,6 +36,12 @@ Example:
 ```bash
 python -m pbj.sandwich document.pdf --premium --model gpt-4
 ```
+
+The pipeline automatically runs all 4 stages:
+1. **Peanut**: PDF → Markdown
+2. **Butter**: Markdown → Enhanced Markdown  
+3. **Jelly**: Enhanced Markdown → Structured JSON
+4. **Toast**: Column-based → Row-based JSON
 
 ## Configuration
 
@@ -105,6 +111,29 @@ from pbj.jelly import Jelly
 
 jelly = Jelly(model="gpt-4")
 processed_pages = jelly.process_document_folder("document_folder")
+```
+
+### Stage 4: Toast (Format)
+JSON format conversion from column-based to row-based
+```python
+from pbj.toast import Toast
+
+toast = Toast()
+toasted_data = toast.convert_file("final_output.json")
+```
+
+### Standalone Toast Usage
+You can also use Toast independently to convert existing PB&J outputs:
+
+```bash
+# Convert a specific file
+python -m pbj.toast final_output.json
+
+# Convert and save to new file
+python -m pbj.toast final_output.json toasted_output.json
+
+# Convert a document folder
+python -m pbj.toast document_folder/
 ```
 
 ## Output Structure

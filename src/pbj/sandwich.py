@@ -35,6 +35,7 @@ from typing import Optional, Dict, Any
 from .peanut import Peanut
 from .butter import Butter
 from .jelly import Jelly
+from .toast import Toast
 from .config import PipelineConfig, create_config
 
 class Sandwich:
@@ -73,6 +74,7 @@ class Sandwich:
         self.peanut = Peanut(config=self.config)
         self.butter = Butter(model=self.config.openai_model, config=self.config)
         self.jelly = Jelly(model=self.config.openai_model, config=self.config)
+        self.toast = Toast()
     
     def process(self, pdf_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -111,6 +113,18 @@ class Sandwich:
             
             print(f"✅ JELLY COMPLETE - Processed {len(processed_pages)} pages")
             
+            # STAGE 4: TOAST (FORMAT CONVERSION) - CONVERT TO ROW-BASED FORMAT
+            print("\n🍞 STAGE 4: TOAST (FORMAT CONVERSION)")
+            print("-" * 40)
+            
+            # Convert final output to toasted format
+            final_output_path = Path(document_folder) / "final_output.json"
+            if final_output_path.exists():
+                self.toast.convert_file(str(final_output_path))
+                print(f"✅ TOAST COMPLETE - Converted to row-based format")
+            else:
+                print(f"⚠️  TOAST SKIPPED - No final_output.json found")
+            
             # PIPELINE COMPLETION SUMMARY
             pipeline_end = datetime.now()
             total_time = (pipeline_end - pipeline_start).total_seconds()
@@ -147,6 +161,10 @@ class Sandwich:
                         "pages_processed": len(processed_pages),
                         "individual_json_folder": str(Path(document_folder) / "03_cleaned_json"),
                         "final_output": str(Path(document_folder) / "final_output.json")
+                    },
+                    "stage_4_toast_format": {
+                        "format_converted": "column-based to row-based",
+                        "final_output": str(Path(document_folder) / "final_output.json")
                     }
                 },
                 "data_summary": {
@@ -179,7 +197,27 @@ class Sandwich:
             
         except Exception as e:
             print(f"\n❌ PB&J PIPELINE FAILED: {e}")
-            raise
+            print(f"   Pipeline crashed - check your API keys and document format")
+            print(f"   Error details: {str(e)}")
+            # Return partial results instead of crashing
+            return {
+                "pipeline_info": {
+                    "completed_at": datetime.now().isoformat(),
+                    "total_processing_time_seconds": (datetime.now() - pipeline_start).total_seconds(),
+                    "pdf_source": pdf_path,
+                    "document_folder": "PIPELINE_FAILED",
+                    "llamaparse_mode": "premium" if self.config.use_premium_mode else "standard",
+                    "openai_model": self.config.openai_model,
+                    "output_base_dir": self.config.output_base_dir,
+                    "status": "FAILED",
+                    "error": str(e)
+                },
+                "error_info": {
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "failed_at_stage": "unknown"
+                }
+            }
 
     def make(self, pdf_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -187,61 +225,3 @@ class Sandwich:
         User-friendly alias for process() method
         """
         return self.process(pdf_path, output_dir)
-
-
-def main():
-    """🥪 Command line interface for the PB&J Pipeline"""
-    
-    if len(sys.argv) < 2:
-        print("🥪 PB&J Pipeline - Parse, Better, JSON")
-        print("Usage: python -m pbj.sandwich <pdf_path> [--premium] [--model MODEL]")
-        print("\nExamples:")
-        print("  python -m pbj.sandwich test.pdf")
-        print("  python -m pbj.sandwich document.pdf --premium")
-        print("  python -m pbj.sandwich report.pdf --premium --model gpt-4")
-        print("\nOptions:")
-        print("  --premium    Use LlamaParse Premium mode (better quality, costs more)")
-        print("  --model      OpenAI model for enhancement/cleaning (default: gpt-4)")
-        sys.exit(1)
-    
-    # PARSE COMMAND LINE ARGUMENTS
-    pdf_path = sys.argv[1]
-    use_premium = "--premium" in sys.argv
-    
-    # GET MODEL ARGUMENT
-    openai_model = "gpt-4"  # DEFAULT
-    if "--model" in sys.argv:
-        model_index = sys.argv.index("--model")
-        if model_index + 1 < len(sys.argv):
-            openai_model = sys.argv[model_index + 1]
-    
-    # VALIDATE PDF FILE
-    if not Path(pdf_path).exists():
-        print(f"❌ ERROR: PDF file not found: {pdf_path}")
-        sys.exit(1)
-    
-    if not pdf_path.lower().endswith('.pdf'):
-        print(f"❌ ERROR: File must be a PDF: {pdf_path}")
-        sys.exit(1)
-    
-    # SHOW CONFIGURATION
-    print("🥪 PB&J PIPELINE CONFIGURATION:")
-    print(f"  📄 PDF File: {pdf_path}")
-    print(f"  🔧 LlamaParse Mode: {'Premium' if use_premium else 'Standard'}")
-    print(f"  🤖 OpenAI Model: {openai_model}")
-    print()
-    
-    try:
-        # RUN COMPLETE PB&J PIPELINE
-        sandwich = Sandwich(use_premium=use_premium, openai_model=openai_model)
-        result = sandwich.process(pdf_path)
-        
-        print(f"\n🎯 SUCCESS! Check your results in: {result['folder_structure']['main_folder']}")
-        
-    except Exception as e:
-        print(f"\n💥 PB&J PIPELINE ERROR: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main() 

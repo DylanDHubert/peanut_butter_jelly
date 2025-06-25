@@ -102,7 +102,7 @@ MARKDOWN CONTENT TO ENHANCE:
 
 ENHANCED OUTPUT:"""
 
-    async def enhance_markdown_async(self, markdown_content: str, filename: str) -> EnhancedDocument:
+    async def enhance_markdown_async(self, markdown_content: str, filename: str) -> Optional[EnhancedDocument]:
         """
         Enhance a single markdown document
         
@@ -166,7 +166,8 @@ ENHANCED OUTPUT:"""
             
         except Exception as e:
             print(f"❌ ENHANCEMENT ERROR: {e}")
-            raise
+            print(f"   Skipping page {filename} due to error")
+            return None  # Return None instead of raising to allow pipeline to continue
     
     def _analyze_enhancements(self, original: str, enhanced: str) -> List[str]:
         """Analyze what enhancements were made"""
@@ -186,21 +187,21 @@ ENHANCED OUTPUT:"""
         
         return notes or ["General formatting and structure improvements"]
     
-    def process(self, markdown_content: str, filename: str = "document.md") -> EnhancedDocument:
+    def process(self, markdown_content: str, filename: str = "document.md") -> Optional[EnhancedDocument]:
         """
         🧈 Process Markdown → Enhanced Markdown
         Main Butter processing method
         """
         return asyncio.run(self.enhance_markdown_async(markdown_content, filename))
     
-    def process_async(self, markdown_content: str, filename: str = "document.md") -> EnhancedDocument:
+    def process_async(self, markdown_content: str, filename: str = "document.md") -> Optional[EnhancedDocument]:
         """
         🧈 Async Process Markdown → Enhanced Markdown
         Async Butter processing method
         """
         return asyncio.run(self.enhance_markdown_async(markdown_content, filename))
     
-    def process_file(self, markdown_file_path: str) -> EnhancedDocument:
+    def process_file(self, markdown_file_path: str) -> Optional[EnhancedDocument]:
         """
         🧈 Process markdown file → Enhanced markdown
         File-based Butter processing method
@@ -234,8 +235,11 @@ ENHANCED OUTPUT:"""
         for md_file in markdown_files:
             try:
                 enhanced_doc = self.process_file(str(md_file))
-                enhanced_docs.append(enhanced_doc)
-                print(f"✅ ENHANCED: {md_file.name}")
+                if enhanced_doc is not None:
+                    enhanced_docs.append(enhanced_doc)
+                    print(f"✅ ENHANCED: {md_file.name}")
+                else:
+                    print(f"⚠️  SKIPPED: {md_file.name} (enhancement failed)")
             except Exception as e:
                 print(f"❌ FAILED TO ENHANCE {md_file.name}: {e}")
                 continue
@@ -274,9 +278,20 @@ ENHANCED OUTPUT:"""
         enhanced_folder.mkdir(exist_ok=True)
         
         enhanced_docs = []
+        skipped_pages = []
         for md_file in markdown_files:
             try:
                 enhanced_doc = self.process_file(str(md_file))
+                if enhanced_doc is None:
+                    # Page was skipped due to error
+                    skipped_pages.append({
+                        "filename": md_file.name,
+                        "error": "Enhancement failed - page skipped",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    print(f"⚠️  SKIPPED: {md_file.name} (enhancement failed)")
+                    continue
+                    
                 enhanced_docs.append(enhanced_doc)
                 
                 # SAVE EACH ENHANCED DOCUMENT IMMEDIATELY (PAGE-WISE SAVING)
@@ -285,10 +300,15 @@ ENHANCED OUTPUT:"""
                 print(f"✅ ENHANCED AND SAVED: {md_file.name}")
             except Exception as e:
                 print(f"❌ FAILED TO ENHANCE {md_file.name}: {e}")
+                skipped_pages.append({
+                    "filename": md_file.name,
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                })
                 continue
         
         # UPDATE DOCUMENT METADATA
-        self._update_document_metadata(doc_folder, "enhancement", enhanced_docs)
+        self._update_document_metadata(doc_folder, "enhancement", enhanced_docs, skipped_pages)
         
         print(f"✅ ENHANCED AND SAVED {len(enhanced_docs)} DOCUMENTS TO: {enhanced_folder}")
         
@@ -318,7 +338,7 @@ ENHANCED OUTPUT:"""
         
         print(f"SAVED ENHANCED PAGE: {output_file}")
 
-    def _update_document_metadata(self, doc_folder: Path, stage: str, enhanced_docs: List[EnhancedDocument]):
+    def _update_document_metadata(self, doc_folder: Path, stage: str, enhanced_docs: List[EnhancedDocument], skipped_pages: List[Dict[str, Any]]):
         """Update the document metadata with completed stage info"""
         metadata_file = doc_folder / "document_metadata.json"
         
@@ -342,7 +362,8 @@ ENHANCED OUTPUT:"""
                 "enhancement_summary": {
                     doc.filename: doc.enhancement_notes 
                     for doc in enhanced_docs
-                }
+                },
+                "skipped_pages": skipped_pages
             }
             
             # SAVE UPDATED METADATA
