@@ -57,10 +57,14 @@ class Peanut:
         # LOAD PROMPTS FROM CONFIG FILE
         prompts = self._load_prompts()
         
+        # VALIDATE API KEY BEFORE CREATING PARSER
+        if not self.config.llamaparse_api_key:
+            raise ValueError("LlamaParse API key is required but not found in configuration")
+        
         # CONFIGURE LLAMAPARSE WITH OPTIMIZED SETTINGS FOR TECHNICAL DOCUMENTS
         # USING NEW API PARAMETERS INSTEAD OF DEPRECATED parsing_instruction
         self.parser = LlamaParse(
-            api_key=self.config.llamaparse_api_key,  # CONFIG VALIDATION ENSURES THIS IS NOT NONE
+            api_key=self.config.llamaparse_api_key,  # NOW GUARANTEED TO BE NOT NONE
             result_type=ResultType.MD,  # OUTPUT FORMAT AS MARKDOWN
             verbose=self.config.enable_verbose_logging,  # ENABLE VERBOSE LOGGING
             language="en",           # SET LANGUAGE TO ENGLISH

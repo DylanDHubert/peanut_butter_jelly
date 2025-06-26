@@ -73,7 +73,7 @@ class Sandwich:
             )
         
         # INITIALIZE OUR PB&J COMPONENTS WITH CONFIGURATION
-        self.peanut = Peanut(config=self.config)
+        # Note: Peanut is created fresh per PDF to avoid LlamaParse job conflicts
         self.butter = Butter(model=self.config.openai_model, config=self.config)
         self.jelly = Jelly(model=self.config.openai_model, config=self.config)
         self.toast = Toast()
@@ -93,8 +93,10 @@ class Sandwich:
             print("\n🥜 STAGE 1: PEANUT (PARSE) - PDF PROCESSING")
             print("-" * 40)
             
-            parsed_docs = self.peanut.process(pdf_path)
-            stage1_result = self.peanut.save_parsed_documents(parsed_docs, output_dir, pdf_path)
+            # Create fresh Peanut instance for each PDF to avoid LlamaParse job conflicts
+            peanut = Peanut(config=self.config)
+            parsed_docs = peanut.process(pdf_path)
+            stage1_result = peanut.save_parsed_documents(parsed_docs, output_dir, pdf_path)
             
             document_folder = stage1_result["main_folder"]
             print(f"✅ PEANUT COMPLETE - Document folder: {document_folder}")
