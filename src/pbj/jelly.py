@@ -200,7 +200,11 @@ JSON OUTPUT:"""
             print(f"   Skipping page {file_path.name} due to JSON parsing error")
             return None  # Return None instead of raising to allow pipeline to continue
         except Exception as e:
-            print(f"❌ PROCESSING ERROR: {e}")
+            # Check if this is a "no content" response from OpenAI
+            if "no markdown content provided" in str(e) or "no content" in str(e).lower():
+                print(f"⚠️  SKIPPED: {file_path.name} (empty content - no meaningful data to extract)")
+            else:
+                print(f"❌ PROCESSING ERROR: {e}")
             print(f"   Skipping page {file_path.name} due to error")
             return None  # Return None instead of raising to allow pipeline to continue
     
@@ -422,7 +426,11 @@ JSON OUTPUT:"""
             print(f"RAW RESPONSE: {response.choices[0].message.content}")
             raise
         except Exception as e:
-            print(f"❌ PROCESSING ERROR: {e}")
+            # Check if this is a "no content" response from OpenAI
+            if "no markdown content provided" in str(e) or "no content" in str(e).lower():
+                print(f"⚠️  SKIPPED: {enhanced_doc.filename} (empty content - no meaningful data to extract)")
+            else:
+                print(f"❌ PROCESSING ERROR: {e}")
             raise
 
     def process_enhanced_document(self, enhanced_doc) -> ProcessedPage:

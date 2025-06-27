@@ -10,6 +10,9 @@ ENHANCEMENTS ALLOWED:
 - Clean up markdown formatting
 - Add descriptive titles if missing
 
+CONTENT WITHOUT TABLES:
+If the markdown contains no tables, simply clean up the formatting and structure while preserving all text content. Return the enhanced markdown even if no tables are present.
+
 CRITICAL RULES - VIOLATION MEANS COMPLETE FAILURE:
 1. NEVER add HTML comments like "<!-- table continues -->" or "<!-- remaining rows -->"
 2. NEVER truncate or omit ANY table rows or data values

@@ -32,7 +32,7 @@ max_timeout: 180                                   # Maximum processing time in 
 # OPENAI SETTINGS
 # ---------------
 openai_model: "gpt-4"                              # Model for enhancement and cleaning
-max_tokens: 8000                                   # Maximum tokens per request
+max_tokens: 6000                                   # Maximum tokens per request
 
 # PROCESSING SETTINGS
 # -------------------
