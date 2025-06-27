@@ -131,14 +131,17 @@ JSON OUTPUT:"""
         
         print(f"PROCESSING FILE: {file_path.name}")
         
+        # STRIP BUTTER METADATA BEFORE PROCESSING
+        cleaned_markdown = self._strip_butter_metadata(markdown_content)
+        
         # SAFETY CHECK: DETECT HTML COMMENTS IN INPUT
-        if '<!--' in markdown_content and '-->' in markdown_content:
+        if '<!--' in cleaned_markdown and '-->' in cleaned_markdown:
             print(f"⚠️  WARNING: HTML comments detected in input markdown for {file_path.name}")
             print(f"   This may indicate data truncation from previous stage")
-            print(f"   HTML comment found: {markdown_content[markdown_content.find('<!--'):markdown_content.find('<!--')+100]}...")
+            print(f"   HTML comment found: {cleaned_markdown[cleaned_markdown.find('<!--'):cleaned_markdown.find('<!--')+100]}...")
         
         # CREATE CLEANING PROMPT
-        prompt = self._create_cleaning_prompt(markdown_content)
+        prompt = self._create_cleaning_prompt(cleaned_markdown)
         
         try:
             # CALL OPENAI TO CLEAN THE DATA
@@ -182,7 +185,7 @@ JSON OUTPUT:"""
                 summary=cleaned_data.get("summary", ""),
                 keywords=cleaned_data.get("keywords", []),
                 tables=tables,
-                raw_content=markdown_content,
+                raw_content=cleaned_markdown,
                 processing_metadata={
                     "source_file": str(file_path),
                     "processed_at": datetime.now().isoformat(),
@@ -647,6 +650,47 @@ JSON OUTPUT:"""
             print(f"🎉 PIPELINE COMPLETE - ALL STAGES FINISHED")
         else:
             print(f"WARNING: No metadata file found at {metadata_file}")
+
+    def _strip_butter_metadata(self, markdown_content: str) -> str:
+        """
+        Strip Butter's metadata headers from enhanced markdown
+        Removes the enhancement metadata that Butter adds at the top
+        """
+        lines = markdown_content.split('\n')
+        
+        # Look for the metadata section that ends with "---"
+        start_index = 0
+        end_index = len(lines)
+        
+        for i, line in enumerate(lines):
+            # Skip the title line (starts with #)
+            if line.strip().startswith('#') and '(Enhanced)' in line:
+                start_index = i + 1
+                continue
+            
+            # Skip metadata lines (start with * or **)
+            if line.strip().startswith('*') or line.strip().startswith('**'):
+                start_index = i + 1
+                continue
+            
+            # Skip empty lines after metadata
+            if line.strip() == '' and start_index == i:
+                start_index = i + 1
+                continue
+            
+            # Stop when we hit the "---" separator
+            if line.strip() == '---':
+                start_index = i + 1
+                break
+        
+        # Return content without metadata
+        cleaned_content = '\n'.join(lines[start_index:]).strip()
+        
+        # If we stripped everything, return original (safety check)
+        if not cleaned_content:
+            return markdown_content
+        
+        return cleaned_content
 
 
 
