@@ -87,3 +87,6 @@ env/
 ENV/
 env.bak/
 venv.bak/
+
+# User Added
+/processed_documents/

@@ -113,6 +113,49 @@ ENHANCED OUTPUT:"""
         """
         print(f"ENHANCING MARKDOWN: {filename}")
         
+        # Check if content needs chunking
+        chunks = self._chunk_content(markdown_content, self.max_tokens)
+        
+        if len(chunks) == 1:
+            # No chunking needed - process normally
+            return await self._enhance_single_chunk(chunks[0], filename)
+        else:
+            # Chunking required - process each chunk and merge
+            print(f"🔄 PROCESSING {len(chunks)} CHUNKS FOR LARGE DOCUMENT")
+            enhanced_chunks = []
+            
+            for i, chunk in enumerate(chunks):
+                print(f"   📄 PROCESSING CHUNK {i+1}/{len(chunks)}")
+                enhanced_chunk = await self._enhance_single_chunk(chunk, f"{filename}_chunk_{i+1}")
+                if enhanced_chunk:
+                    enhanced_chunks.append(enhanced_chunk)
+            
+            if not enhanced_chunks:
+                print(f"❌ ALL CHUNKS FAILED TO ENHANCE")
+                return None
+            
+            # Merge enhanced chunks
+            merged_content = "\n\n---\n\n".join([chunk.enhanced_content for chunk in enhanced_chunks])
+            merged_notes = []
+            for chunk in enhanced_chunks:
+                merged_notes.extend(chunk.enhancement_notes)
+            
+            # Create merged enhanced document
+            enhanced_doc = EnhancedDocument(
+                enhanced_content=merged_content,
+                original_content=markdown_content,
+                filename=filename,
+                enhancement_timestamp=datetime.now(),
+                enhancement_notes=merged_notes
+            )
+            
+            print(f"✅ ENHANCED: {len(merged_notes)} improvements across {len(chunks)} chunks")
+            return enhanced_doc
+    
+    async def _enhance_single_chunk(self, markdown_content: str, filename: str) -> Optional[EnhancedDocument]:
+        """
+        Enhance a single chunk of markdown content
+        """
         # CREATE ENHANCEMENT PROMPT
         prompt = self._create_enhancement_prompt(markdown_content)
         
@@ -164,7 +207,7 @@ ENHANCED OUTPUT:"""
             
         except Exception as e:
             print(f"❌ ENHANCEMENT ERROR: {e}")
-            print(f"   Skipping page {filename} due to error")
+            print(f"   Skipping chunk {filename} due to error")
             return None  # Return None instead of raising to allow pipeline to continue
     
     def _analyze_enhancements(self, original: str, enhanced: str) -> List[str]:
@@ -421,6 +464,136 @@ ENHANCED OUTPUT:"""
         
         print(f"SAVED ENHANCEMENT METADATA: {metadata_file}")
         print(f"ENHANCED DOCUMENTS STORED IN: {output_path}")
+
+    def _estimate_tokens(self, text: str) -> int:
+        """
+        Rough token estimation (4 chars ≈ 1 token)
+        Includes safety margin for prompt overhead
+        """
+        # Rough estimation: 4 characters ≈ 1 token
+        base_tokens = len(text) // 4
+        
+        # Add safety margin for prompt overhead (system + user prompts)
+        prompt_overhead = 500  # Conservative estimate for prompt tokens
+        
+        return base_tokens + prompt_overhead
+    
+    def _detect_table_boundaries(self, content: str) -> List[tuple]:
+        """
+        Detect table boundaries to avoid splitting tables
+        Returns list of (start_pos, end_pos) for each table
+        """
+        table_boundaries = []
+        
+        # Look for HTML tables
+        import re
+        table_pattern = r'<table[^>]*>.*?</table>'
+        for match in re.finditer(table_pattern, content, re.DOTALL):
+            table_boundaries.append((match.start(), match.end()))
+        
+        # Look for markdown tables (lines with | characters)
+        lines = content.split('\n')
+        table_start = None
+        
+        for i, line in enumerate(lines):
+            if '|' in line and line.strip().startswith('|') or line.strip().endswith('|'):
+                if table_start is None:
+                    table_start = i
+            elif table_start is not None:
+                # End of table found
+                table_boundaries.append((table_start, i))
+                table_start = None
+        
+        # Handle table that ends at end of content
+        if table_start is not None:
+            table_boundaries.append((table_start, len(lines)))
+        
+        return table_boundaries
+    
+    def _chunk_content(self, content: str, max_tokens: int) -> List[str]:
+        """
+        Split content into chunks that fit within token limit
+        NEVER splits tables - keeps them together
+        """
+        if self._estimate_tokens(content) <= max_tokens:
+            return [content]  # No chunking needed
+        
+        print(f"📏 CONTENT TOO LARGE ({self._estimate_tokens(content)} tokens), CHUNKING REQUIRED")
+        
+        # Detect table boundaries
+        table_boundaries = self._detect_table_boundaries(content)
+        print(f"   📊 FOUND {len(table_boundaries)} TABLES TO PRESERVE")
+        
+        chunks = []
+        current_chunk = ""
+        current_tokens = 0
+        
+        # Split by paragraphs, respecting table boundaries
+        paragraphs = content.split('\n\n')
+        
+        # Track character position for accurate table detection
+        char_pos = 0
+        
+        for paragraph in paragraphs:
+            paragraph_tokens = self._estimate_tokens(paragraph)
+            
+            # Check if this paragraph contains a table by checking if any table boundary overlaps
+            paragraph_start = char_pos
+            paragraph_end = char_pos + len(paragraph)
+            
+            paragraph_has_table = any(
+                (start <= paragraph_start and end >= paragraph_start) or  # Table starts before paragraph
+                (start <= paragraph_end and end >= paragraph_end) or      # Table ends after paragraph  
+                (start >= paragraph_start and end <= paragraph_end)       # Table is completely within paragraph
+                for start, end in table_boundaries
+            )
+            
+            # If adding this paragraph would exceed limit
+            if current_tokens + paragraph_tokens > max_tokens:
+                # If current chunk is not empty, save it
+                if current_chunk.strip():
+                    chunks.append(current_chunk.strip())
+                    print(f"   📄 CHUNK {len(chunks)}: {self._estimate_tokens(current_chunk)} tokens")
+                
+                # Start new chunk
+                current_chunk = paragraph
+                current_tokens = paragraph_tokens
+                
+                # If single paragraph is too large, we have a problem
+                if paragraph_tokens > max_tokens:
+                    print(f"⚠️  WARNING: Single paragraph too large ({paragraph_tokens} tokens)")
+                    if paragraph_has_table:
+                        print(f"   🚨 CRITICAL: Large paragraph contains table - cannot split safely!")
+                        print(f"   This may cause token limit issues")
+                    # Split at sentence level as fallback
+                    sentences = paragraph.split('. ')
+                    current_chunk = ""
+                    current_tokens = 0
+                    for sentence in sentences:
+                        sentence_tokens = self._estimate_tokens(sentence)
+                        if current_tokens + sentence_tokens > max_tokens:
+                            if current_chunk.strip():
+                                chunks.append(current_chunk.strip())
+                            current_chunk = sentence
+                            current_tokens = sentence_tokens
+                        else:
+                            current_chunk += ". " + sentence if current_chunk else sentence
+                            current_tokens += sentence_tokens
+            else:
+                # Add to current chunk
+                current_chunk += "\n\n" + paragraph if current_chunk else paragraph
+                current_tokens += paragraph_tokens
+            
+            # Update character position for next iteration
+            char_pos += len(paragraph) + 2  # +2 for the \n\n separator
+        
+        # Add final chunk
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+            print(f"   📄 CHUNK {len(chunks)}: {self._estimate_tokens(current_chunk)} tokens")
+        
+        print(f"✅ SPLIT INTO {len(chunks)} CHUNKS")
+        return chunks
 
 
 
