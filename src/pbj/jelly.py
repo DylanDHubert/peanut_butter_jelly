@@ -483,7 +483,7 @@ JSON OUTPUT:"""
         print(f"🎉 SUCCESSFULLY PROCESSED AND SAVED {len(processed_pages)}/{len(enhanced_docs)} ENHANCED DOCUMENTS")
         return processed_pages
 
-    def _process_document_folder(self, document_folder_path: str) -> List[ProcessedPage]:
+    def _process_document_folder(self, document_folder_path: str, skip_butter: bool = False) -> List[ProcessedPage]:
         """
         🍇 INTERNAL: Process document folder → JSON pages  
         Internal pipeline method - not intended for direct user calls
@@ -492,21 +492,25 @@ JSON OUTPUT:"""
         if not doc_folder.exists():
             raise FileNotFoundError(f"Document folder not found: {document_folder_path}")
         
-        # FIND ENHANCED MARKDOWN SUBFOLDER
-        enhanced_md_folder = doc_folder / "02_enhanced_markdown"
-        if not enhanced_md_folder.exists():
-            raise FileNotFoundError(f"Enhanced markdown folder not found: {enhanced_md_folder}")
+        # Decide which markdown folder to use
+        if skip_butter:
+            md_folder = doc_folder / "01_parsed_markdown"
+            print(f"⏩ SKIP BUTTER ENABLED: Using raw markdown from {md_folder}")
+        else:
+            md_folder = doc_folder / "02_enhanced_markdown"
+        if not md_folder.exists():
+            raise FileNotFoundError(f"Markdown folder not found: {md_folder}")
         
         # CREATE CLEANED JSON SUBFOLDER
         cleaned_json_folder = doc_folder / "03_cleaned_json"
         cleaned_json_folder.mkdir(exist_ok=True)
         
-        # FIND ALL ENHANCED MARKDOWN FILES
-        md_files = list(enhanced_md_folder.glob("*.md"))
+        # FIND ALL MARKDOWN FILES
+        md_files = list(md_folder.glob("*.md"))
         if not md_files:
-            raise ValueError(f"No enhanced markdown files found in: {enhanced_md_folder}")
+            raise ValueError(f"No markdown files found in: {md_folder}")
         
-        print(f"FOUND {len(md_files)} ENHANCED MARKDOWN FILES TO PROCESS IN DOCUMENT FOLDER")
+        print(f"FOUND {len(md_files)} MARKDOWN FILES TO PROCESS IN DOCUMENT FOLDER ({md_folder.name})")
         
         # PROCESS EACH FILE AND SAVE IMMEDIATELY
         processed_pages = []

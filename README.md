@@ -22,24 +22,45 @@ print(f"Output saved to: {result['pipeline_info']['document_folder']}")
 
 ## Command Line Usage
 
-You can also run the pipeline from the command line:
+You can run the pipeline from the command line using the `pbj` command:
 
+```bash
+# Basic usage
+pbj document.pdf
+
+# With options
+pbj document.pdf --premium --model gpt-4 --skip-butter
+```
+
+### CLI Options
+- `--premium` : Use LlamaParse premium mode for better parsing
+- `--model MODEL` : Specify OpenAI model for enhancement/cleaning (e.g., `gpt-4`, `gpt-4-turbo`)
+- `--skip-butter` : Skip Butter stage and go directly from Peanut to Jelly
+- `--output-dir DIR` : Custom output directory (optional)
+
+### Examples
+```bash
+# Process with default settings
+pbj document.pdf
+
+# Use premium mode and specific model
+pbj document.pdf --premium --model gpt-4-turbo
+
+# Skip Butter stage for faster processing
+pbj document.pdf --skip-butter
+
+# All options combined
+pbj document.pdf --premium --model gpt-4-turbo --skip-butter --output-dir custom_output
+```
+
+### Legacy Usage (if not installed as package)
 ```bash
 python -m pbj.sandwich document.pdf
 ```
 
-Options:
-- `--premium` : Use LlamaParse premium mode
-- `--model MODEL` : Specify OpenAI model for enhancement/cleaning (e.g., `gpt-4`)
-
-Example:
-```bash
-python -m pbj.sandwich document.pdf --premium --model gpt-4
-```
-
 The pipeline automatically runs all 4 stages:
 1. **Peanut**: PDF → Markdown
-2. **Butter**: Markdown → Enhanced Markdown  
+2. **Butter**: Markdown → Enhanced Markdown (can be skipped with `--skip-butter`)
 3. **Jelly**: Enhanced Markdown → Structured JSON
 4. **Toast**: Column-based → Row-based JSON
 
@@ -82,6 +103,9 @@ config = create_config(
 
 sandwich = Sandwich(config=config)
 result = sandwich.process("document.pdf")
+
+# Skip Butter stage programmatically
+result = sandwich.process("document.pdf", skip_butter=True)
 ```
 
 ## Pipeline Stages
@@ -170,6 +194,16 @@ processed_documents/
 
 ## Installation
 
+### Option 1: Install as Package (Recommended)
+```bash
+# Install in editable mode for development
+pip install -e .
+
+# Or install from PyPI (when published)
+pip install pbj-pipeline
+```
+
+### Option 2: Install Dependencies Only
 ```bash
 pip install -r requirements.txt
 ```
@@ -179,6 +213,26 @@ pip install -r requirements.txt
 - Python 3.8+
 - LlamaParse API key
 - OpenAI API key (for enhancement and cleaning stages)
+
+## Package Development
+
+### Building and Publishing
+```bash
+# Build package
+python -m build
+
+# Publish to PyPI (when ready)
+python -m twine upload dist/*
+```
+
+### Development Setup
+```bash
+# Install in editable mode
+pip install -e .
+
+# Install development dependencies
+pip install -e ".[dev]"
+```
 
 ## Use Cases
 

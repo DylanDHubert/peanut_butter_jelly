@@ -78,7 +78,7 @@ class Sandwich:
         self.jelly = Jelly(model=self.config.openai_model, config=self.config)
         self.toast = Toast()
     
-    def process(self, pdf_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
+    def process(self, pdf_path: str, output_dir: Optional[str] = None, skip_butter: bool = False) -> Dict[str, Any]:
         """
         🥪 Process PDF → Complete JSON pipeline
         Main Sandwich processing method - runs the complete 3-stage PB&J pipeline
@@ -101,20 +101,20 @@ class Sandwich:
             document_folder = stage1_result["main_folder"]
             print(f"✅ PEANUT COMPLETE - Document folder: {document_folder}")
             
-            # STAGE 2: BUTTER (BETTER) - MARKDOWN ENHANCEMENT
-            print("\n🧈 STAGE 2: BUTTER (BETTER) - MARKDOWN ENHANCEMENT")
-            print("-" * 40)
-            
-            enhanced_docs = self.butter._process_document_folder(document_folder)
-            
-            print(f"✅ BUTTER COMPLETE - Enhanced {len(enhanced_docs)} documents")
+            enhanced_docs = None
+            if not skip_butter:
+                # STAGE 2: BUTTER (BETTER) - MARKDOWN ENHANCEMENT
+                print("\n🧈 STAGE 2: BUTTER (BETTER) - MARKDOWN ENHANCEMENT")
+                print("-" * 40)
+                enhanced_docs = self.butter._process_document_folder(document_folder)
+                print(f"✅ BUTTER COMPLETE - Enhanced {len(enhanced_docs)} documents")
+            else:
+                print("\n⏩ SKIPPING BUTTER STAGE -- Using raw markdown from Peanut")
             
             # STAGE 3: JELLY (JSON) - DATA CLEANING AND JSON EXTRACTION
             print("\n🍇 STAGE 3: JELLY (JSON) - DATA EXTRACTION")
             print("-" * 40)
-            
-            processed_pages = self.jelly._process_document_folder(document_folder)
-            
+            processed_pages = self.jelly._process_document_folder(document_folder, skip_butter=skip_butter)
             print(f"✅ JELLY COMPLETE - Processed {len(processed_pages)} pages")
             
             # STAGE 4: TOAST (FORMAT CONVERSION) - CONVERT TO ROW-BASED FORMAT
@@ -150,7 +150,8 @@ class Sandwich:
                     "document_folder": document_folder,
                     "llamaparse_mode": "premium" if self.config.use_premium_mode else "standard",
                     "openai_model": self.config.openai_model,
-                    "output_base_dir": self.config.output_base_dir
+                    "output_base_dir": self.config.output_base_dir,
+                    "butter_skipped": skip_butter
                 },
                 "stage_results": {
                     "stage_1_peanut_parse": {
@@ -158,7 +159,7 @@ class Sandwich:
                         "folder": stage1_result["parsed_markdown_folder"]
                     },
                     "stage_2_butter_better": {
-                        "documents_enhanced": len(enhanced_docs),
+                        "documents_enhanced": len(enhanced_docs) if enhanced_docs is not None else 0,
                         "folder": str(Path(document_folder) / "02_enhanced_markdown")
                     },
                     "stage_3_jelly_json": {
@@ -223,9 +224,91 @@ class Sandwich:
                 }
             }
 
-    def make(self, pdf_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
+    def make(self, pdf_path: str, output_dir: Optional[str] = None, skip_butter: bool = False) -> Dict[str, Any]:
         """
         🥪 Make a complete PB&J sandwich
         User-friendly alias for process() method
         """
-        return self.process(pdf_path, output_dir)
+        return self.process(pdf_path, output_dir, skip_butter=skip_butter)
+
+
+def main():
+    """
+    CLI entry point for the PB&J pipeline
+    """
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="🥪 PB&J Pipeline - Parse, Better, JSON document processing",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  pbj document.pdf                    # Process with default settings
+  pbj document.pdf --premium         # Use LlamaParse premium mode
+  pbj document.pdf --model gpt-4     # Use specific OpenAI model
+  pbj document.pdf --premium --model gpt-4-turbo  # Both options
+  pbj document.pdf --skip-butter     # Skip Butter stage (Peanut → Jelly)
+        """
+    )
+    
+    parser.add_argument(
+        "pdf_path",
+        help="Path to the PDF file to process"
+    )
+    
+    parser.add_argument(
+        "--premium",
+        action="store_true",
+        help="Use LlamaParse premium mode for better parsing"
+    )
+    
+    parser.add_argument(
+        "--model",
+        default="gpt-4",
+        help="OpenAI model to use for enhancement and cleaning (default: gpt-4)"
+    )
+    
+    parser.add_argument(
+        "--output-dir",
+        help="Custom output directory (optional)"
+    )
+    
+    parser.add_argument(
+        "--skip-butter",
+        action="store_true",
+        help="Skip Butter stage and go directly from Peanut to Jelly"
+    )
+    
+    args = parser.parse_args()
+    
+    # Check if PDF file exists
+    if not os.path.exists(args.pdf_path):
+        print(f"❌ Error: PDF file '{args.pdf_path}' not found")
+        sys.exit(1)
+    
+    try:
+        # Create and run the pipeline
+        sandwich = Sandwich(
+            use_premium=args.premium,
+            openai_model=args.model
+        )
+        
+        result = sandwich.process(args.pdf_path, args.output_dir, skip_butter=args.skip_butter)
+        
+        if result.get("pipeline_info", {}).get("status") == "FAILED":
+            print(f"\n❌ Pipeline failed: {result.get('error_info', {}).get('error_message', 'Unknown error')}")
+            sys.exit(1)
+        else:
+            print(f"\n✅ Pipeline completed successfully!")
+            print(f"📁 Output saved to: {result['pipeline_info']['document_folder']}")
+            
+    except KeyboardInterrupt:
+        print("\n\n⏹️  Pipeline interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
